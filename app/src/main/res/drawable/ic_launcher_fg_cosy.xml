@@ -1,0 +1,22 @@
+<!--
+  Cozy mark: a geometric single-storey lowercase "a" - a clean ring bowl with a
+  flush stem. Content sits inside the 72x72 adaptive-icon safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Bowl: outer circle with the counter punched out. -->
+    <path
+        android:fillColor="#112938"
+        android:fillType="evenOdd"
+        android:pathData="M25,62 a21,21 0 1,0 42,0 a21,21 0 1,0 -42,0 Z
+                          M36,62 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
+
+    <!-- Stem, flush to the right of the bowl. -->
+    <path
+        android:fillColor="#112938"
+        android:pathData="M62,41 h11 v42 h-11 Z" />
+</vector>

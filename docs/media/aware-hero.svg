@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">aware</title><desc id="desc">Know where your money goes.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff9f0"/><stop offset="1" stop-color="#f1e7dc"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#312b27" flood-opacity=".16"/></filter>
+  </defs>
+  <rect width="1200" height="420" rx="42" fill="url(#paper)"/>
+  <circle cx="1065" cy="72" r="145" fill="#c9bed8" opacity=".7"/><circle cx="1135" cy="345" r="180" fill="#bfd7dc" opacity=".75"/><circle cx="915" cy="390" r="125" fill="#d9e8b5" opacity=".8"/>
+  <g transform="translate(82 75)"><rect width="92" height="92" rx="28" fill="#312b27"/><circle cx="46" cy="46" r="24" fill="none" stroke="#d9e8b5" stroke-width="12"/><path d="M70 46v28" stroke="#d9e8b5" stroke-width="12" stroke-linecap="round"/></g>
+  <text x="82" y="255" fill="#312b27" font-family="Manrope,Inter,Arial,sans-serif" font-size="112" font-weight="700" letter-spacing="-6">aware</text>
+  <text x="87" y="310" fill="#625950" font-family="Manrope,Inter,Arial,sans-serif" font-size="27">know where your money goes.</text>
+  <g filter="url(#shadow)" transform="translate(735 83)"><rect width="330" height="224" rx="30" fill="#312b27"/><text x="30" y="47" fill="#cabdb1" font-family="Manrope,Inter,Arial,sans-serif" font-size="14" letter-spacing="2">THIS MONTH</text><text x="30" y="110" fill="#fff9f0" font-family="Manrope,Inter,Arial,sans-serif" font-size="50" font-weight="600">₹ 18,420</text><rect x="30" y="145" width="270" height="12" rx="6" fill="#514940"/><rect x="30" y="145" width="176" height="12" rx="6" fill="#d9e8b5"/><text x="30" y="190" fill="#f0c38e" font-family="Manrope,Inter,Arial,sans-serif" font-size="17">65% of plan</text></g>
+</svg>
