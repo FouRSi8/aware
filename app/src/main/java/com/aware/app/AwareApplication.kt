@@ -15,6 +15,9 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import com.aware.app.data.RecurringWorker
 import com.aware.app.ai.GroqCategorySuggester
 import com.aware.app.data.BudgetAlertWorker
+import com.aware.app.data.WeeklyReportWorker
+import androidx.glance.appwidget.updateAll
+import com.aware.app.widget.AwareWidget
 
 class AwareApplication : Application() {
     lateinit var container: AppContainer
@@ -28,6 +31,7 @@ class AwareApplication : Application() {
         val database = Room.databaseBuilder(this, AppDatabase::class.java, "aware.db")
             .openHelperFactory(factory)
             .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_2_3)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
         container = AppContainer(database, secureStore)
@@ -35,9 +39,22 @@ class AwareApplication : Application() {
             container.repository.ensureStarterStructure()
             container.repository.cleanupExpiredRawBodies()
             container.repository.materializeDueRecurring()
+            container.repository.generateLatestWeeklyReportIfMissing()
+            AwareWidget().updateAll(this@AwareApplication)
         }
         RecurringWorker.schedule(this)
         BudgetAlertWorker.schedule(this)
+        WeeklyReportWorker.schedule(this)
+    }
+}
+
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE capture_candidates ADD COLUMN source TEXT NOT NULL DEFAULT 'SMS'")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS weekly_reports (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, weekStart INTEGER NOT NULL, weekEndExclusive INTEGER NOT NULL, generatedAt INTEGER NOT NULL, incomePaise INTEGER NOT NULL, refundPaise INTEGER NOT NULL, spendingPaise INTEGER NOT NULL, transferPaise INTEGER NOT NULL, topMerchant TEXT)",
+        )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_weekly_reports_weekStart ON weekly_reports (weekStart)")
     }
 }
 

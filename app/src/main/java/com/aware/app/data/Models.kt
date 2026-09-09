@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable enum class AccountKind { BANK, UPI, CASH }
 @Serializable enum class TransactionType { INCOME, EXPENSE, TRANSFER, REFUND, ADJUSTMENT }
 @Serializable enum class TransactionStatus { EXPECTED, PENDING_REVIEW, POSTED, DISMISSED, REVERSED }
-@Serializable enum class TransactionSource { SMS, MANUAL, RECURRING }
+@Serializable enum class TransactionSource { SMS, NOTIFICATION, MANUAL, RECURRING }
 @Serializable enum class RecurrenceCadence { DAILY, WEEKLY, MONTHLY, YEARLY, CUSTOM }
 @Serializable enum class BudgetScope { OVERALL, CATEGORY, ACCOUNT, PAYEE }
 @Serializable enum class BudgetPeriod { DAILY, WEEKLY, MONTHLY, YEARLY }
@@ -79,7 +79,21 @@ data class CaptureCandidateEntity(
     val confidence: Float,
     val fingerprint: String,
     val receivedAt: Long,
+    val source: TransactionSource = TransactionSource.SMS,
     val status: TransactionStatus = TransactionStatus.PENDING_REVIEW,
+)
+
+@Entity(tableName = "weekly_reports", indices = [Index(value = ["weekStart"], unique = true)])
+data class WeeklyReportEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val weekStart: Long,
+    val weekEndExclusive: Long,
+    val generatedAt: Long,
+    val incomePaise: Long,
+    val refundPaise: Long,
+    val spendingPaise: Long,
+    val transferPaise: Long,
+    val topMerchant: String? = null,
 )
 
 @Entity(tableName = "budget_buckets", indices = [Index(value = ["monthKey", "categoryId"], unique = true)])

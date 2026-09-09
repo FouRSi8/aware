@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aware.app.ui.AwareApp
 import com.aware.app.ui.MainViewModel
@@ -59,6 +60,7 @@ class MainActivity : FragmentActivity() {
     private var authenticationShowing = false
     private var incomingReviewCandidateId by mutableStateOf<Long?>(null)
     private var incomingWidgetTransactionId by mutableStateOf<Long?>(null)
+    private var paymentNotificationAccessGranted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +69,7 @@ class MainActivity : FragmentActivity() {
         unlocked = !lockEnabled
         if (lockEnabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         consumeLaunchIntent(intent)
+        refreshPaymentNotificationAccess()
         setContent {
             val viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory(app.container.repository, app.container.categorySuggester))
             var smsGranted by remember { mutableStateOf(ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) }
@@ -151,6 +154,7 @@ class MainActivity : FragmentActivity() {
                     widgetTransactionId = incomingWidgetTransactionId,
                     onWidgetTransactionHandled = { incomingWidgetTransactionId = null },
                     smsGranted = smsGranted,
+                    paymentNotificationAccessGranted = paymentNotificationAccessGranted,
                     onRequestSms = {
                         if (smsGranted) {
                             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
@@ -159,6 +163,14 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onRequestNotifications = { if (android.os.Build.VERSION.SDK_INT >= 33) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                    onRequestPaymentNotificationAccess = {
+                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        runCatching { startActivity(intent) }
+                            .onFailure {
+                                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                            }
+                    },
+                    onRefreshWidget = { scope.launch { com.aware.app.widget.AwareWidget().updateAll(this@MainActivity) } },
                     onAppLockChange = { enabled ->
                         if (enabled) {
                             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -216,6 +228,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshPaymentNotificationAccess()
         val app = application as? AwareApplication ?: return
         val lockEnabled = app.container.secureStore.getBoolean("app_lock")
         if (!lockEnabled) {
@@ -226,6 +239,10 @@ class MainActivity : FragmentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (unlocked) return
         requestUnlock()
+    }
+
+    private fun refreshPaymentNotificationAccess() {
+        paymentNotificationAccessGranted = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
     }
 
     override fun onStop() {

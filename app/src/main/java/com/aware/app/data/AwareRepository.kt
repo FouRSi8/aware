@@ -66,7 +66,7 @@ class AwareRepository(
         database.categoryDao().insertAll(defaults)
     }
 
-    suspend fun saveCapture(parsed: ParsedSms): Long {
+    suspend fun saveCapture(parsed: ParsedSms, source: TransactionSource = TransactionSource.SMS): Long {
         val candidate = CaptureCandidateEntity(
             sender = parsed.sender,
             encryptedBody = secureStore.encrypt(parsed.rawBody),
@@ -78,6 +78,7 @@ class AwareRepository(
             confidence = parsed.confidence,
             fingerprint = parsed.fingerprint,
             receivedAt = parsed.receivedAt,
+            source = source,
         )
         return database.captureDao().insert(candidate)
     }
@@ -109,7 +110,7 @@ class AwareRepository(
         val newTransaction = TransactionEntity(
                 amountPaise = finalAmount,
                 type = candidate.type,
-                source = TransactionSource.SMS,
+                source = candidate.source,
                 accountId = finalAccount,
                 destinationAccountId = cash?.id,
                 categoryId = finalCategory,
@@ -144,6 +145,7 @@ class AwareRepository(
     }
 
     suspend fun addTransaction(item: TransactionEntity): Long = database.transactionDao().insert(item)
+    suspend fun updateTransaction(item: TransactionEntity) = database.transactionDao().update(item)
     suspend fun deleteTransaction(id: Long) {
         database.transactionDao().byId(id)?.let { database.transactionDao().delete(it) }
     }
@@ -161,9 +163,6 @@ class AwareRepository(
         }
         id
     }
-    suspend fun updateTransactionDate(id: Long, occurredAt: Long) {
-        database.transactionDao().byId(id)?.let { database.transactionDao().update(it.copy(occurredAt = occurredAt)) }
-    }
     suspend fun addCategory(item: CategoryEntity) = database.categoryDao().insert(item)
     suspend fun addBudget(item: BudgetBucketEntity) = database.budgetDao().upsert(item)
     suspend fun addRecurring(item: RecurringRuleEntity) = database.recurringDao().insert(item)
@@ -171,6 +170,31 @@ class AwareRepository(
     suspend fun candidate(id: Long) = database.captureDao().byId(id)
     fun decryptCandidateBody(candidate: CaptureCandidateEntity) = secureStore.decrypt(candidate.encryptedBody)
     suspend fun pendingCount() = database.captureDao().pendingCount()
+    suspend fun latestWeeklyReport() = database.weeklyReportDao().latest()
+
+    suspend fun generateLatestWeeklyReportIfMissing(now: Long = System.currentTimeMillis()): WeeklyReportEntity {
+        val zone = ZoneId.systemDefault()
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val currentWeekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
+        val weekStart = currentWeekStart.minusWeeks(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val weekEnd = currentWeekStart.atStartOfDay(zone).toInstant().toEpochMilli()
+        database.weeklyReportDao().latest()?.takeIf { it.weekStart == weekStart }?.let { return it }
+
+        val transactions = database.transactionDao().rangeOnce(weekStart, weekEnd)
+        val expenses = transactions.filter { it.type == TransactionType.EXPENSE }
+        val report = WeeklyReportEntity(
+            weekStart = weekStart,
+            weekEndExclusive = weekEnd,
+            generatedAt = now,
+            incomePaise = transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise },
+            refundPaise = transactions.filter { it.type == TransactionType.REFUND }.sumOf { it.amountPaise },
+            spendingPaise = expenses.sumOf { it.amountPaise },
+            transferPaise = transactions.filter { it.type == TransactionType.TRANSFER }.sumOf { it.amountPaise },
+            topMerchant = expenses.groupBy { it.merchant.trim() }.maxByOrNull { (_, items) -> items.sumOf { it.amountPaise } }?.key?.takeIf(String::isNotBlank),
+        )
+        database.weeklyReportDao().upsert(report)
+        return report
+    }
     suspend fun cleanupExpiredRawBodies() = database.captureDao().deleteExpired(Instant.now().minusSeconds(7 * 24 * 3600).toEpochMilli())
 
     suspend fun materializeDueRecurring(now: Long = System.currentTimeMillis()) = database.withTransaction {

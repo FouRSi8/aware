@@ -87,7 +87,6 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         selectedReview.value = null
     }
 
-    fun quickPost(id: Long) = viewModelScope.launch { repository.postCandidate(id) }
     fun dismissCandidate(id: Long) = viewModelScope.launch { repository.dismissCandidate(id); selectedReview.value = null }
 
     fun addManual(
@@ -120,8 +119,31 @@ class MainViewModel(private val repository: AwareRepository, private val categor
 
     fun deleteTransaction(id: Long) = viewModelScope.launch { repository.deleteTransaction(id) }
 
-    fun updateTransactionDate(id: Long, occurredAt: Long) = viewModelScope.launch {
-        repository.updateTransactionDate(id, occurredAt)
+    fun updateTransaction(
+        transaction: TransactionEntity,
+        amountPaise: Long,
+        merchant: String,
+        type: TransactionType,
+        accountId: Long,
+        destinationAccountId: Long?,
+        categoryId: Long?,
+        note: String,
+        tags: String,
+        occurredAt: Long,
+    ) = viewModelScope.launch {
+        repository.updateTransaction(
+            transaction.copy(
+                amountPaise = amountPaise,
+                merchant = merchant.ifBlank { type.name.lowercase().replaceFirstChar(Char::uppercase) },
+                type = type,
+                accountId = accountId,
+                destinationAccountId = destinationAccountId.takeIf { type == TransactionType.TRANSFER },
+                categoryId = categoryId.takeUnless { type == TransactionType.TRANSFER },
+                note = note,
+                tags = tags.split(',').map(String::trim).filter(String::isNotBlank).distinct().joinToString(","),
+                occurredAt = occurredAt,
+            ),
+        )
     }
 
     fun addBudget(

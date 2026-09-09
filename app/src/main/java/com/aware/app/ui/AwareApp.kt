@@ -62,6 +62,8 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Lightbulb
@@ -170,6 +172,7 @@ import com.aware.app.data.CategoryEntity
 import com.aware.app.data.RecurrenceCadence
 import com.aware.app.data.RecurringRuleEntity
 import com.aware.app.data.TransactionEntity
+import com.aware.app.data.TransactionSource
 import com.aware.app.data.TransactionType
 import com.aware.app.ui.theme.Appearance
 import com.aware.app.ui.theme.CozyPalette
@@ -229,6 +232,12 @@ private data class PeriodSnapshot(
     val netPaise: Long get() = incomePaise + refundPaise - expensePaise
 }
 
+private data class TransactionConfirmation(
+    val amountPaise: Long,
+    val merchant: String,
+    val type: TransactionType,
+)
+
 @Composable
 fun AwareApp(
     appearance: Appearance,
@@ -241,8 +250,11 @@ fun AwareApp(
     widgetTransactionId: Long?,
     onWidgetTransactionHandled: () -> Unit,
     smsGranted: Boolean,
+    paymentNotificationAccessGranted: Boolean,
     onRequestSms: () -> Unit,
     onRequestNotifications: () -> Unit,
+    onRequestPaymentNotificationAccess: () -> Unit,
+    onRefreshWidget: () -> Unit,
     onAppLockChange: (Boolean) -> Unit,
     onExportCsv: () -> Unit,
     onCreateBackup: (String) -> Unit,
@@ -263,7 +275,9 @@ fun AwareApp(
     var showAccount by remember { mutableStateOf(false) }
     var showAccountManager by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<AccountEntity?>(null) }
-    var editingTransactionDate by remember { mutableStateOf<TransactionEntity?>(null) }
+    var selectedTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
+    var editingTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
+    var confirmation by remember { mutableStateOf<TransactionConfirmation?>(null) }
     var showGroqKey by remember { mutableStateOf(false) }
     var showBackupPassword by remember { mutableStateOf(false) }
     var showRestorePassword by remember { mutableStateOf(false) }
@@ -274,8 +288,10 @@ fun AwareApp(
     var showAppearance by remember { mutableStateOf(false) }
     var showSkin by remember { mutableStateOf(false) }
     var showCozyPalette by remember { mutableStateOf(false) }
+    var showNotificationAccessDisclosure by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(restoreReady) { if (restoreReady) showRestorePassword = true }
+    LaunchedEffect(state.pending.map { it.id to it.status }) { onRefreshWidget() }
     LaunchedEffect(widgetTransactionId) {
         val transactionId = widgetTransactionId ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
@@ -300,20 +316,20 @@ fun AwareApp(
         Box(Modifier.fillMaxSize()) {
             when (selected) {
                 Tab.HOME -> HomeScreen(
-                    state, smsGranted, onRequestSms, viewModel::openReview,
+                    state, smsGranted, paymentNotificationAccessGranted, onRequestSms, viewModel::openReview,
                     onAdd = { addType = it },
                     onOpenActivity = { selected = Tab.ACTIVITY },
                     onOpenPlan = { selected = Tab.PLAN },
                     onOpenInsights = { selected = Tab.INSIGHTS },
                     onOpenSettings = { selected = Tab.SETTINGS },
-                    onEditTransactionDate = { editingTransactionDate = it },
+                    onOpenTransaction = { selectedTransaction = it },
                     modifier = Modifier.padding(padding),
                 )
                 Tab.ACTIVITY -> ActivityScreen(
                     state,
                     onBack = { selected = Tab.HOME },
                     onExportCsv = onExportCsv,
-                    onEditTransactionDate = { editingTransactionDate = it },
+                    onOpenTransaction = { selectedTransaction = it },
                     modifier = Modifier.padding(padding),
                 )
                 Tab.PLAN -> PlanScreen(state, { showBudget = true }, { showRecurring = true }, Modifier.padding(padding))
@@ -323,12 +339,13 @@ fun AwareApp(
                     onOpenAiSetup = { showGroqKey = true },
                     onOpenMonthlyReport = { showMonthlyReport = true },
                     onOpenSettings = { selected = Tab.SETTINGS },
-                    onEditTransactionDate = { editingTransactionDate = it },
+                    onOpenTransaction = { selectedTransaction = it },
                     modifier = Modifier.padding(padding),
                 )
                 Tab.SETTINGS -> SettingsScreen(
-                    state, smsGranted, groqConfigured, appLockEnabled, smartNudgesEnabled,
+                    state, smsGranted, paymentNotificationAccessGranted, groqConfigured, appLockEnabled, smartNudgesEnabled,
                     onRequestSms,
+                    { showNotificationAccessDisclosure = true },
                     { viewModel.setSmartNudges(!smartNudgesEnabled); if (!smartNudgesEnabled) onRequestNotifications() },
                     {
                         val enabled = !appLockEnabled
@@ -401,6 +418,7 @@ fun AwareApp(
     ) { amount, merchant, type, account, destination, category, note, tags, occurredAt ->
         viewModel.addManual(amount, merchant, type, account, destination, category, note, tags, occurredAt)
         addType = null
+        confirmation = TransactionConfirmation(amount, merchant, type)
     } }
     if (showBudget) BudgetDialog(state, { showBudget = false }, onAddCategory = { showCategoryForIncome = false }) { name, cap, scope, category, account, payee, period, start, end, recurring -> viewModel.addBudget(name, cap, scope, category, account, payee, period, start, end, recurring); showBudget = false }
     if (showRecurring) RecurringDialog(
@@ -425,16 +443,51 @@ fun AwareApp(
             },
         )
     }
-    editingTransactionDate?.let { transaction ->
-        AwareDatePicker(
-            title = "Transaction date",
-            initialMillis = transaction.occurredAt,
-            onDismiss = { editingTransactionDate = null },
-            onConfirm = {
-                viewModel.updateTransactionDate(transaction.id, it)
-                editingTransactionDate = null
+    selectedTransaction?.let { transaction ->
+        TransactionDetailDialog(
+            transaction = transaction,
+            state = state,
+            onDismiss = { selectedTransaction = null },
+            onEdit = {
+                selectedTransaction = null
+                editingTransaction = transaction
+            },
+            onDelete = {
+                viewModel.deleteTransaction(transaction.id)
+                selectedTransaction = null
             },
         )
+    }
+    if (showNotificationAccessDisclosure) AwareDialog("Capture payment notifications", { showNotificationAccessDisclosure = false }) {
+        Text(
+            "aware will read notifications from Google Pay and super.money to find transaction amounts. Android grants notification access broadly, but aware filters all other apps out on-device.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Every detected payment stays in Upcoming until you review and approve it. Nothing is added to your ledger automatically.",
+            fontWeight = FontWeight.SemiBold,
+        )
+        Button(
+            onClick = {
+                showNotificationAccessDisclosure = false
+                onRequestPaymentNotificationAccess()
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+        ) { Text("Continue to Android settings") }
+    }
+    editingTransaction?.let { transaction ->
+        AddTransactionDialog(
+            state = state,
+            initialType = transaction.type,
+            transaction = transaction,
+            onDismiss = { editingTransaction = null },
+            onAddCategory = { showCategoryForIncome = it },
+            onAddAccount = { showAccount = true },
+        ) { amount, merchant, type, account, destination, category, note, tags, occurredAt ->
+            viewModel.updateTransaction(transaction, amount, merchant, type, account, destination, category, note, tags, occurredAt)
+            editingTransaction = null
+        }
     }
     showCategoryForIncome?.let { isIncome ->
         CategoryDialog(isIncome, { showCategoryForIncome = null }) { name, emoji, color ->
@@ -453,13 +506,19 @@ fun AwareApp(
             state = state,
             onDismiss = viewModel::closeReview,
             onDiscard = { viewModel.dismissCandidate(candidate.id) },
-            onConfirm = { amount, merchant, category, account, learn -> viewModel.confirmCandidate(candidate.id, amount, merchant, category, account, learn) },
+            onConfirm = { amount, merchant, category, account, learn ->
+                viewModel.confirmCandidate(candidate.id, amount, merchant, category, account, learn)
+                confirmation = TransactionConfirmation(amount, merchant, candidate.type)
+            },
             groqConfigured = groqConfigured,
             aiSuggestion = aiSuggestion,
             onSuggest = { viewModel.suggestCategory(candidate) },
             onAddCategory = { showCategoryForIncome = it },
             onAddAccount = { showAccount = true },
         )
+    }
+    confirmation?.let { saved ->
+        TransactionConfirmationOverlay(saved) { confirmation = null }
     }
 }
 
@@ -610,20 +669,26 @@ private fun BottomDestination(
         tween(180), label = "tab-pill-${tab.name}",
     )
     Box(
-        modifier.padding(vertical = 8.dp).clip(RoundedCornerShape(if (t.maximal) 0.dp else 50.dp))
-            .background(pillColor)
+        modifier.fillMaxHeight()
             .clickable(interactionSource = interaction, indication = null) {
             if (!active) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onSelected(tab)
         },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            tab.icon,
-            tab.label,
-            Modifier.graphicsLayer { scaleX = scale; scaleY = scale }.size(25.dp),
-            tint = contentColor,
-        )
+        Box(
+            Modifier.width(46.dp).height(38.dp)
+                .clip(RoundedCornerShape(if (t.maximal) 0.dp else 13.dp))
+                .background(pillColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                tab.icon,
+                tab.label,
+                Modifier.graphicsLayer { scaleX = scale; scaleY = scale }.size(25.dp),
+                tint = contentColor,
+            )
+        }
     }
 }
 @Composable
@@ -644,6 +709,7 @@ private fun NeoCard(
 private fun HomeScreen(
     state: MainUiState,
     smsGranted: Boolean,
+    paymentNotificationAccessGranted: Boolean,
     onRequestSms: () -> Unit,
     onReview: (Long) -> Unit,
     onAdd: (TransactionType) -> Unit,
@@ -651,7 +717,7 @@ private fun HomeScreen(
     onOpenPlan: () -> Unit,
     onOpenInsights: () -> Unit,
     onOpenSettings: () -> Unit,
-    onEditTransactionDate: (TransactionEntity) -> Unit,
+    onOpenTransaction: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.WEEK) }
@@ -672,7 +738,7 @@ private fun HomeScreen(
                 onSettings = onOpenSettings,
             )
         }
-        if (!smsGranted) {
+        if (!smsGranted && !paymentNotificationAccessGranted) {
             item {
                 val tk = LocalTokens.current
                 Surface(
@@ -709,7 +775,7 @@ private fun HomeScreen(
             grouped.forEach { (date, transactions) ->
                 item(key = "home-$date") { AwareDateHeader(date, transactions) }
                 items(transactions, key = { it.id }, contentType = { "txn" }) {
-                    TransactionRow(it, categoriesById, accountsById, onClick = { onEditTransactionDate(it) })
+                    TransactionRow(it, categoriesById, accountsById, onClick = { onOpenTransaction(it) })
                 }
             }
             item {
@@ -929,12 +995,12 @@ private fun AwareCaptureRow(candidate: CaptureCandidateEntity, onClick: () -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(36.dp).clip(awareShape(10.dp)).background(LocalTokens.current.warn.copy(.25f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Sms, null, tint = LocalTokens.current.warn, modifier = Modifier.size(18.dp))
+            Icon(if (candidate.source == TransactionSource.NOTIFICATION) Icons.Default.Notifications else Icons.Default.Sms, null, tint = LocalTokens.current.warn, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
             Text(candidate.merchant, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (candidate.confidence >= .82f) "Ready to add" else "Needs a quick review", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            Text("${candidate.sender} · awaiting your approval", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(money(candidate.amountPaise), fontWeight = FontWeight.SemiBold)
     }
@@ -1076,7 +1142,7 @@ private fun ActivityScreen(
     state: MainUiState,
     onBack: () -> Unit,
     onExportCsv: () -> Unit,
-    onEditTransactionDate: (TransactionEntity) -> Unit,
+    onOpenTransaction: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
@@ -1147,7 +1213,7 @@ private fun ActivityScreen(
             grouped.forEach { (date, transactions) ->
                 item(key = "date-$date") { DateGroupHeader(date, transactions) }
                 items(transactions, key = { it.id }, contentType = { "txn" }) { transaction ->
-                    TransactionRow(transaction, categoriesById, accountsById, onClick = { onEditTransactionDate(transaction) })
+                    TransactionRow(transaction, categoriesById, accountsById, onClick = { onOpenTransaction(transaction) })
                 }
             }
         }
@@ -1393,7 +1459,7 @@ private fun InsightsScreen(
     onOpenAiSetup: () -> Unit,
     onOpenMonthlyReport: () -> Unit,
     onOpenSettings: () -> Unit,
-    onEditTransactionDate: (TransactionEntity) -> Unit,
+    onOpenTransaction: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.WEEK) }
@@ -1476,7 +1542,7 @@ private fun InsightsScreen(
         }
         item { AwareSectionHeader("ACTIVITY", "${periodTransactions.size} ENTRIES") }
         items(periodTransactions.take(5), key = { "insight-${it.id}" }, contentType = { "txn" }) {
-            TransactionRow(it, categoriesById, accountsById, onClick = { onEditTransactionDate(it) })
+            TransactionRow(it, categoriesById, accountsById, onClick = { onOpenTransaction(it) })
         }
         item {
             TextButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { Text("Open budgets →", fontWeight = FontWeight.SemiBold) }
@@ -1687,10 +1753,12 @@ private data class CategorySlice(val label: String, val emoji: String, val amoun
 private fun SettingsScreen(
     state: MainUiState,
     smsGranted: Boolean,
+    paymentNotificationAccessGranted: Boolean,
     groqConfigured: Boolean,
     appLockEnabled: Boolean,
     smartNudgesEnabled: Boolean,
     onRequestSms: () -> Unit,
+    onRequestPaymentNotifications: () -> Unit,
     onToggleNudges: () -> Unit,
     onToggleAppLock: () -> Unit,
     onAddAccount: () -> Unit,
@@ -1742,6 +1810,7 @@ private fun SettingsScreen(
         item {
             AwareSettingsGroup {
                 AwareSettingsLink(Icons.Default.Sms, "Transaction SMS", if (smsGranted) "On · manage" else "Enable", LocalTokens.current.accent, onRequestSms)
+                AwareSettingsLink(Icons.Default.Notifications, "Payment notifications", if (paymentNotificationAccessGranted) "On · manage" else "Enable", LocalTokens.current.info, onRequestPaymentNotifications)
                 AwareSettingsLink(Icons.Default.AutoGraph, "AI categorisation", if (groqConfigured) "On" else "Off", LocalTokens.current.positive, onAddGroqKey)
             }
         }
@@ -2084,23 +2153,205 @@ private fun MoneyMoveOption(
 }
 
 @Composable
+private fun TransactionDetailDialog(
+    transaction: TransactionEntity,
+    state: MainUiState,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var confirmDelete by remember(transaction.id) { mutableStateOf(false) }
+    val category = transaction.categoryId?.let { id -> state.categories.firstOrNull { it.id == id } }
+    val account = state.accounts.firstOrNull { it.id == transaction.accountId }
+    val destination = transaction.destinationAccountId?.let { id -> state.accounts.firstOrNull { it.id == id } }
+    val incoming = transaction.type == TransactionType.INCOME || transaction.type == TransactionType.REFUND
+    val accent = if (incoming) LocalTokens.current.positive else if (transaction.type == TransactionType.TRANSFER) LocalTokens.current.info else LocalTokens.current.negative
+    val dateTime = remember(transaction.occurredAt) {
+        DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy · h:mm a", Locale.ENGLISH)
+            .format(Instant.ofEpochMilli(transaction.occurredAt).atZone(ZoneId.systemDefault()))
+    }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        LightDialogSystemBars()
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Close, "Close details") }
+                    Spacer(Modifier.weight(1f))
+                    Text("Transaction details", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.size(40.dp))
+                }
+                Spacer(Modifier.height(22.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = awareShape(24.dp),
+                    color = accent.copy(alpha = .18f),
+                    border = if (LocalTokens.current.maximal) BorderStroke(1.dp, accent) else null,
+                ) {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(transaction.type.name.lowercase().replaceFirstChar(Char::uppercase), color = readableAccent(accent, accent.copy(alpha = .18f).compositeOver(MaterialTheme.colorScheme.background)), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Spacer(Modifier.height(8.dp))
+                        AnimatedMoneyAmount(
+                            transaction.amountPaise,
+                            style = MaterialTheme.typography.displayMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Spacer(Modifier.height(7.dp))
+                        Text(transaction.merchant, style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+                AwareSettingsGroup {
+                    TransactionDetailRow("Date", dateTime)
+                    TransactionDetailRow("Status", transaction.status.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase))
+                    TransactionDetailRow("Account", account?.name ?: "Unknown account")
+                    if (transaction.type == TransactionType.TRANSFER) TransactionDetailRow("Destination", destination?.name ?: "Unknown account")
+                    if (transaction.type != TransactionType.TRANSFER) TransactionDetailRow("Category", category?.let { "${it.emoji} ${it.name}" } ?: "Uncategorized")
+                    TransactionDetailRow("Source", transaction.source.name.lowercase().replaceFirstChar(Char::uppercase))
+                }
+                if (transaction.note.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    AwareSettingsSection("Note")
+                    Surface(Modifier.fillMaxWidth(), awareShape(14.dp), MaterialTheme.colorScheme.surface) {
+                        Text(transaction.note, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (transaction.tags.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    AwareSettingsSection("Tags")
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        transaction.tags.split(',').map(String::trim).filter(String::isNotBlank).forEach { tag ->
+                            Surface(shape = awareShape(50.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                                Text(tag, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = onEdit,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = awareShape(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+                ) {
+                    Icon(Icons.Default.Edit, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Edit transaction", fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Icon(Icons.Default.Delete, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Delete transaction", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("Delete this transaction?") },
+        text = { Text("${transaction.merchant} · ${money(transaction.amountPaise)} will be permanently removed from your ledger.") },
+        confirmButton = { TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Keep it") } },
+    )
+}
+
+@Composable
+private fun TransactionDetailRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(92.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        Text(value, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+    }
+}
+
+@Composable
+private fun TransactionConfirmationOverlay(
+    confirmation: TransactionConfirmation,
+    onFinished: () -> Unit,
+) {
+    val progress = remember(confirmation) { Animatable(0f) }
+    LaunchedEffect(confirmation) {
+        progress.animateTo(1f, animationSpec = spring(dampingRatio = .58f, stiffness = Spring.StiffnessLow))
+        delay(1_250)
+        onFinished()
+    }
+    val incoming = confirmation.type == TransactionType.INCOME || confirmation.type == TransactionType.REFUND
+    val accent = if (incoming) LocalTokens.current.positive else if (confirmation.type == TransactionType.TRANSFER) LocalTokens.current.info else LocalTokens.current.accent
+    Dialog(onDismissRequest = onFinished, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .48f)).padding(28.dp), contentAlignment = Alignment.Center) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp)
+                    .graphicsLayer {
+                        val value = progress.value
+                        alpha = value.coerceIn(0f, 1f)
+                        scaleX = .82f + (.18f * value)
+                        scaleY = .82f + (.18f * value)
+                    },
+                shape = awareShape(26.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 18.dp,
+            ) {
+                Column(Modifier.padding(horizontal = 24.dp, vertical = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.size(108.dp)) {
+                            drawCircle(accent.copy(alpha = .14f), radius = size.minDimension * .5f * progress.value)
+                            drawCircle(accent, radius = size.minDimension * .34f, style = Stroke(width = 5.dp.toPx()))
+                        }
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Transaction saved",
+                            tint = accent,
+                            modifier = Modifier.size(48.dp).graphicsLayer {
+                                scaleX = progress.value
+                                scaleY = progress.value
+                                rotationZ = (1f - progress.value) * -18f
+                            },
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        when (confirmation.type) {
+                            TransactionType.INCOME -> "Income recorded"
+                            TransactionType.TRANSFER -> "Transfer recorded"
+                            TransactionType.REFUND -> "Refund recorded"
+                            else -> "Payment recorded"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Text(money(confirmation.amountPaise), style = MaterialTheme.typography.headlineMedium, color = accent, fontWeight = FontWeight.Bold)
+                    Text(confirmation.merchant.ifBlank { "Saved to your ledger" }, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AddTransactionDialog(
     state: MainUiState,
     initialType: TransactionType,
+    transaction: TransactionEntity? = null,
     onDismiss: () -> Unit,
     onAddCategory: (Boolean) -> Unit,
     onAddAccount: () -> Unit,
     onSave: (Long, String, TransactionType, Long, Long?, Long?, String, String, Long) -> Unit,
 ) {
-    var amount by remember { mutableStateOf("") }
-    var merchant by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var tags by remember { mutableStateOf("") }
-    var type by remember(initialType) { mutableStateOf(initialType) }
-    var accountId by remember(state.accounts) { mutableLongStateOf(state.accounts.firstOrNull { it.isDefault }?.id ?: state.accounts.firstOrNull()?.id ?: 0L) }
-    var destination by remember { mutableStateOf<Long?>(null) }
-    var categoryId by remember { mutableStateOf<Long?>(null) }
-    var occurredAt by remember { mutableLongStateOf(startOfTodayMillis()) }
+    var amount by remember(transaction?.id) { mutableStateOf(transaction?.amountPaise?.let(::editableMoney) ?: "") }
+    var merchant by remember(transaction?.id) { mutableStateOf(transaction?.merchant.orEmpty()) }
+    var note by remember(transaction?.id) { mutableStateOf(transaction?.note.orEmpty()) }
+    var tags by remember(transaction?.id) { mutableStateOf(transaction?.tags.orEmpty()) }
+    var type by remember(transaction?.id, initialType) { mutableStateOf(transaction?.type ?: initialType) }
+    var accountId by remember(state.accounts, transaction?.id) {
+        mutableLongStateOf(transaction?.accountId ?: state.accounts.firstOrNull { it.isDefault }?.id ?: state.accounts.firstOrNull()?.id ?: 0L)
+    }
+    var destination by remember(transaction?.id) { mutableStateOf(transaction?.destinationAccountId) }
+    var categoryId by remember(transaction?.id) { mutableStateOf(transaction?.categoryId) }
+    var occurredAt by remember(transaction?.id) { mutableLongStateOf(transaction?.occurredAt ?: startOfTodayMillis()) }
     var showDatePicker by remember { mutableStateOf(false) }
     val paise = parsePaise(amount)
     val canSave = paise != null && paise > 0 && accountId > 0 && (type != TransactionType.TRANSFER || destination != null)
@@ -2136,25 +2387,18 @@ private fun AddTransactionDialog(
                         Icon(Icons.Default.Close, "Close")
                     }
                     Spacer(Modifier.weight(1f))
-                    Surface(shape = awareShape(10.dp), color = MaterialTheme.colorScheme.surface) {
-                        Row(Modifier.padding(3.dp)) {
-                            listOf(TransactionType.EXPENSE, TransactionType.INCOME).forEach { option ->
-                                val active = type == option
-                                Surface(
-                                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { changeType(option) },
-                                    shape = awareShape(8.dp),
-                                    color = if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-                                ) { Text(option.name.lowercase().replaceFirstChar(Char::uppercase), Modifier.padding(horizontal = 14.dp, vertical = 7.dp), color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
-                            }
-                        }
-                    }
+                    Text(if (transaction == null) "New transaction" else "Edit transaction", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     Box(Modifier.size(40.dp))
                 }
-                if (type == TransactionType.TRANSFER || type == TransactionType.REFUND) {
-                    Text(type.name.lowercase().replaceFirstChar(Char::uppercase), Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp), color = if (type == TransactionType.REFUND) LocalTokens.current.positive else LocalTokens.current.hero, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.height(30.dp))
+                Spacer(Modifier.height(10.dp))
+                ChoiceRow(
+                    listOf(TransactionType.EXPENSE, TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.REFUND),
+                    selected = type,
+                    label = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+                    onSelected = ::changeType,
+                )
+                Spacer(Modifier.height(24.dp))
                 Text(
                     "₹" + if (amount.isBlank()) "0" else amount,
                     Modifier.fillMaxWidth(),
@@ -2219,7 +2463,7 @@ private fun AddTransactionDialog(
                 }
                 AwareNumberPad(
                     enabled = canSave,
-                    submitLabel = when (type) {
+                    submitLabel = if (transaction != null) "Save changes" else when (type) {
                         TransactionType.INCOME -> "Add income"
                         TransactionType.TRANSFER -> "Record transfer"
                         TransactionType.REFUND -> "Record refund"
@@ -2228,13 +2472,6 @@ private fun AddTransactionDialog(
                     onKey = ::appendAmount,
                     onSubmit = { if (canSave) onSave(paise ?: 0, merchant, type, accountId, destination, categoryId, note, tags, occurredAt) },
                 )
-                Spacer(Modifier.height(10.dp))
-                if (type == TransactionType.EXPENSE || type == TransactionType.INCOME) {
-                    TextButton(
-                        onClick = { changeType(if (type == TransactionType.EXPENSE) TransactionType.TRANSFER else TransactionType.REFUND) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (type == TransactionType.EXPENSE) "Record a transfer instead" else "Record a refund instead", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
-                }
             }
         }
     }
@@ -2722,13 +2959,14 @@ private fun CandidateReviewDialog(
     val confident = candidate.confidence >= .82f
     val badge = if (confident) LocalTokens.current.positive else LocalTokens.current.accent
     val badgeInk = readableAccent(LocalTokens.current.onAccent, badge)
-    AwareDialog(if (confident) "Ready to add" else "Quick review", onDismiss) {
+    AwareDialog("Authorize payment", onDismiss) {
         Surface(shape = awareShape(16.dp), color = badge) {
             Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(candidate.type.name, color = badgeInk, fontWeight = FontWeight.Black)
                 Text("${(candidate.confidence * 100).toInt()}% CONFIDENCE", color = badgeInk, fontWeight = FontWeight.Black)
             }
         }
+        Text("Captured from ${candidate.sender}. This payment will not appear in your ledger until you approve it here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         MoneyField(amount) { amount = it }
         OutlinedTextField(merchant, { merchant = it }, Modifier.fillMaxWidth(), label = { Text("Merchant") }, colors = cozyFieldColors(), singleLine = true)
         Label("Account")
@@ -2753,7 +2991,7 @@ private fun CandidateReviewDialog(
                 Checkbox(learn, { learn = it }); Text("Remember this merchant next time", fontWeight = FontWeight.Bold)
             }
         }
-        Button(onClick = { onConfirm(paise ?: 0, merchant, categoryId, accountId, learn) }, enabled = paise != null && paise > 0 && merchant.isNotBlank() && accountId > 0, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Add to aware") }
+        Button(onClick = { onConfirm(paise ?: 0, merchant, categoryId, accountId, learn) }, enabled = paise != null && paise > 0 && merchant.isNotBlank() && accountId > 0, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Authorize and add") }
         TextButton(onClick = onDiscard, modifier = Modifier.fillMaxWidth()) { Text("Not a transaction — discard", color = MaterialTheme.colorScheme.error) }
     }
 }
@@ -2950,6 +3188,12 @@ private fun spentForBudget(budget: BudgetBucketEntity, transactions: List<Transa
         .sumOf { it.amountPaise }
 }
 private fun parsePaise(value: String): Long? = value.toBigDecimalOrNull()?.movePointRight(2)?.longValueExact()
+
+private fun editableMoney(paise: Long): String = if (paise % 100L == 0L) {
+    (paise / 100L).toString()
+} else {
+    "%.2f".format(Locale.ENGLISH, paise / 100.0)
+}
 
 /**
  * Formats paise as Indian-grouped rupees.

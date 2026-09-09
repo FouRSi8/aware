@@ -11,6 +11,15 @@ Parsing, direction detection, amount extraction, and deduplication happen on the
 device. Encrypted raw text is retained only while a capture candidate is
 unresolved and for no more than seven days.
 
+## Payment notifications
+
+If explicitly enabled in Android settings, aware uses notification-listener access
+to inspect notifications posted by Google Pay and super.money. Notifications from
+all other packages are ignored. Transaction extraction happens on the device, and
+every detected payment remains a pending candidate until the user reviews and
+approves it. Notification content is encrypted while pending, cleared after review,
+and never added directly to the ledger.
+
 ## Storage and export
 
 The Room database is encrypted with SQLCipher using a random passphrase protected

@@ -34,12 +34,16 @@ import androidx.glance.text.TextStyle
 import com.aware.app.AwareApplication
 import com.aware.app.MainActivity
 import com.aware.app.data.CaptureCandidateEntity
+import com.aware.app.data.WeeklyReportEntity
 
 import com.aware.app.ui.theme.Appearance
 import com.aware.app.ui.theme.CozyPalette
 import com.aware.app.ui.theme.Skin
 import java.text.NumberFormat
 import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class AwareWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = AwareWidget()
@@ -50,16 +54,17 @@ class AwareWidget : GlanceAppWidget() {
         val repository = (context.applicationContext as AwareApplication).container.repository
         val candidate = repository.latestPending()
         val count = repository.pendingCount()
+        val report = repository.latestWeeklyReport()
         val prefs = context.getSharedPreferences("appearance", Context.MODE_PRIVATE)
         val appearance = Appearance.fromKey(prefs.getString("mode_key", null) ?: prefs.getString("mode", null))
         val skin = Skin.fromKey(prefs.getString("skin_key", null) ?: prefs.getString("skin", null))
         val cozyPalette = CozyPalette.fromKey(prefs.getString("cozy_palette_key", null))
-        provideContent { WidgetContent(candidate, count, appearance, skin, cozyPalette) }
+        provideContent { WidgetContent(candidate, count, report, appearance, skin, cozyPalette) }
     }
 }
 
 @Composable
-private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, appearance: Appearance, skin: Skin, cozyPalette: CozyPalette) {
+private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, report: WeeklyReportEntity?, appearance: Appearance, skin: Skin, cozyPalette: CozyPalette) {
     fun themed(light: Color, dark: Color) = when (appearance) {
         Appearance.LIGHT -> ColorProvider(light, light)
         Appearance.DARK -> ColorProvider(dark, dark)
@@ -100,24 +105,33 @@ private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, appear
             Spacer(GlanceModifier.defaultWeight())
             if (count > 0) Text("$count PENDING", style = TextStyle(color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold))
         }
-        Spacer(GlanceModifier.height(10.dp))
-        if (candidate == null) {
-            Text("Your next money move will land here", style = TextStyle(color = foreground, fontSize = 16.sp, fontWeight = FontWeight.Medium))
+        Spacer(GlanceModifier.height(7.dp))
+        if (report == null) {
+            Text("Your weekly report is being prepared", style = TextStyle(color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Medium))
         } else {
+            Text(weekLabel(report), style = TextStyle(color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold))
             Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = GlanceModifier.defaultWeight()) {
-                    Text(formatMoney(candidate.amountPaise), style = TextStyle(color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold))
-                    Text(candidate.merchant.take(28), style = TextStyle(color = secondary, fontSize = 13.sp))
+                    Text(formatMoney(report.spendingPaise), style = TextStyle(color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+                    Text("spent · net ${formatSignedMoney(report.incomePaise + report.refundPaise - report.spendingPaise)}", style = TextStyle(color = secondary, fontSize = 11.sp))
                 }
-                Spacer(GlanceModifier.width(10.dp))
-                val label = if (candidate.confidence >= HIGH_CONFIDENCE) "ADD  +" else "REVIEW  →"
+            }
+        }
+        candidate?.let {
+            Spacer(GlanceModifier.height(8.dp))
+            Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = GlanceModifier.defaultWeight()) {
+                    Text(formatMoney(it.amountPaise), style = TextStyle(color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold))
+                    Text(it.merchant.take(22), style = TextStyle(color = secondary, fontSize = 11.sp))
+                }
+                Spacer(GlanceModifier.width(8.dp))
                 Text(
-                    label,
+                    "REVIEW  →",
                     modifier = GlanceModifier
                         .background(accent)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .clickable(actionRunCallback<WidgetCandidateAction>(actionParametersOf(CandidateIdKey to candidate.id))),
-                    style = TextStyle(color = onAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .clickable(actionRunCallback<WidgetCandidateAction>(actionParametersOf(CandidateIdKey to it.id))),
+                    style = TextStyle(color = onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold),
                 )
             }
         }
@@ -128,19 +142,24 @@ class WidgetCandidateAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val id = parameters[CandidateIdKey] ?: return
         val repository = (context.applicationContext as AwareApplication).container.repository
-        val candidate = repository.latestPending()?.takeIf { it.id == id } ?: return
-        val transactionId = if (candidate.confidence >= HIGH_CONFIDENCE) repository.postCandidate(id) else -1L
+        repository.latestPending()?.takeIf { it.id == id } ?: return
         AwareWidget().updateAll(context)
         context.startActivity(Intent(context, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra(if (transactionId > 0) "transactionId" else "reviewCandidateId", if (transactionId > 0) transactionId else id)
-            putExtra("showUndo", transactionId > 0)
+            putExtra("reviewCandidateId", id)
         })
     }
 }
 
 private val CandidateIdKey = ActionParameters.Key<Long>("candidate_id")
-const val HIGH_CONFIDENCE = 0.82f
 private fun formatMoney(paise: Long): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).apply {
     maximumFractionDigits = if (paise % 100L == 0L) 0 else 2
 }.format(paise / 100.0)
+private fun formatSignedMoney(paise: Long): String = (if (paise >= 0) "+" else "−") + formatMoney(kotlin.math.abs(paise))
+private fun weekLabel(report: WeeklyReportEntity): String {
+    val zone = ZoneId.systemDefault()
+    val start = Instant.ofEpochMilli(report.weekStart).atZone(zone).toLocalDate()
+    val end = Instant.ofEpochMilli(report.weekEndExclusive).atZone(zone).toLocalDate().minusDays(1)
+    val formatter = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+    return "WEEKLY REPORT · ${start.format(formatter)}–${end.format(formatter)}"
+}

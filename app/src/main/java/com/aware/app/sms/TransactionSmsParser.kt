@@ -85,6 +85,7 @@ class TransactionSmsParser {
         private val REFERENCE = Regex("(?i)(?:ref(?:erence)?(?: no)?|txn(?: id)?|utr)[:#\\s-]*([A-Z0-9]{6,30})")
         private val ACCOUNT = Regex("(?i)(?:a/c|acct|account|card)(?: no)?[\\s:*xX-]*(\\d{3,6})")
         private val MERCHANT_PATTERNS = listOf(
+            Regex("(?i)\\b(?:paid|sent)\\s+(?:(?:INR|Rs\\.?|₹)\\s*[0-9][0-9,]*(?:\\.[0-9]{1,2})?\\s+)(?:to\\s+)?([A-Za-z0-9][A-Za-z0-9 .&'_-]{1,47}?)(?:\\s+(?:via|on|using|ref|upi|from)\\b|[.;]|$)"),
             Regex("(?i)\\b(?:paid|sent)\\s+(?:to\\s+)?([A-Za-z0-9][A-Za-z0-9 .&'_-]{1,47}?)(?:\\s+(?:via|on|using|ref|upi|from)\\b|[.;]|$)"),
             Regex("(?i)\\b(?:at|to)\\s+([A-Za-z0-9][A-Za-z0-9 .&'_-]{1,47}?)(?:\\s+(?:on|via|ref|upi)\\b|[.;]|$)"),
             Regex("(?i)\\binfo[: -]+([A-Za-z0-9][A-Za-z0-9 .&'_-]{1,47}?)(?:[.;]|$)"),

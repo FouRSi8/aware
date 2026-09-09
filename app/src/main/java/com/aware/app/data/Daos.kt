@@ -38,6 +38,7 @@ interface CategoryDao {
 interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY occurredAt DESC") fun observeAll(): Flow<List<TransactionEntity>>
     @Query("SELECT * FROM transactions WHERE occurredAt >= :from AND occurredAt < :to AND status = 'POSTED' ORDER BY occurredAt DESC") fun observeRange(from: Long, to: Long): Flow<List<TransactionEntity>>
+    @Query("SELECT * FROM transactions WHERE occurredAt >= :from AND occurredAt < :to AND status = 'POSTED' ORDER BY occurredAt DESC") suspend fun rangeOnce(from: Long, to: Long): List<TransactionEntity>
     @Query("SELECT * FROM transactions WHERE id = :id") suspend fun byId(id: Long): TransactionEntity?
     @Query("SELECT * FROM transactions ORDER BY id") suspend fun allOnce(): List<TransactionEntity>
     @Query("SELECT * FROM transactions WHERE status = 'EXPECTED' AND type = :type AND occurredAt BETWEEN :from AND :to") suspend fun expectedNear(type: TransactionType, from: Long, to: Long): List<TransactionEntity>
@@ -48,6 +49,12 @@ interface TransactionDao {
     @Query("DELETE FROM transactions") suspend fun clear()
     @Update suspend fun update(item: TransactionEntity)
     @Delete suspend fun delete(item: TransactionEntity)
+}
+
+@Dao
+interface WeeklyReportDao {
+    @Query("SELECT * FROM weekly_reports ORDER BY weekStart DESC LIMIT 1") suspend fun latest(): WeeklyReportEntity?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(report: WeeklyReportEntity): Long
 }
 
 @Dao

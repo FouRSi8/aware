@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">aware</string>
-    <string name="widget_description">Review and add your latest payment</string>
+    <string name="widget_description">See your weekly report and review captured payments</string>
     <string name="widget_title">AWARE</string>
     <string name="widget_waiting">Waiting for your next money move…</string>
 </resources>
