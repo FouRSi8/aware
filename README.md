@@ -29,6 +29,14 @@
   &nbsp; <img src="docs/media/maximal.png" alt="aware maximal theme" width="31%" />
 </p>
 
+<p align="center">
+  <img src="docs/media/linen-cafe.png" alt="aware Linen café palette in OLED mode" width="31%" />
+  &nbsp; <img src="docs/media/navy-tide.png" alt="aware Navy tide palette in light mode" width="31%" />
+  &nbsp; <img src="docs/media/charcoal-leather.png" alt="aware Charcoal and leather palette in dark mode" width="31%" />
+</p>
+
+<p align="center"><sub>Linen café · Navy tide · Charcoal &amp; leather</sub></p>
+
 ## Your money, without the surveillance
 
 aware is built around one idea: recording a purchase should be effortless, but
