@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
+import androidx.glance.LocalContext
 import androidx.glance.GlanceModifier
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
@@ -15,6 +16,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
@@ -66,6 +68,7 @@ class AwareWidget : GlanceAppWidget() {
 
 @Composable
 private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, report: WeeklyReportEntity?, appearance: Appearance, skin: Skin, cozyPalette: CozyPalette) {
+    val context = LocalContext.current
     fun themed(light: Color, dark: Color) = when (appearance) {
         Appearance.LIGHT -> ColorProvider(light, light)
         Appearance.DARK -> ColorProvider(dark, dark)
@@ -116,7 +119,11 @@ private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, report
         CozyPalette.CHARCOAL_LEATHER -> themed(Color(0xFFFFFFFF), Color(0xFF211713))
     }
     Column(
-        modifier = GlanceModifier.fillMaxSize().background(background).padding(if (maximal) 14.dp else 18.dp),
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(background)
+            .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+            .padding(if (maximal) 14.dp else 18.dp),
         verticalAlignment = Alignment.Top,
     ) {
         if (maximal) {
