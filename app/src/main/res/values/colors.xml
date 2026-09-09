@@ -1,4 +1,6 @@
 <resources>
-    <color name="launcher_bg_cosy">#D9E8B5</color>
+    <color name="launcher_bg_cosy">#FFF9F0</color>
+    <color name="launcher_bg_sage_rose">#F8F3ED</color>
+    <color name="launcher_bg_plum_hearth">#FFF6ED</color>
     <color name="launcher_bg_maximal">#08080A</color>
 </resources>

@@ -112,6 +112,9 @@ class MainActivity : FragmentActivity() {
             var cozyPalette by remember {
                 mutableStateOf(CozyPalette.fromKey(appearancePrefs.getString("cozy_palette_key", null)))
             }
+            LaunchedEffect(skin, cozyPalette) {
+                LauncherIconManager.sync(this@MainActivity, skin, cozyPalette)
+            }
             val dark = when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
                 Appearance.LIGHT -> false

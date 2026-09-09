@@ -1,22 +1,10 @@
-<!--
-  Cozy mark: a geometric single-storey lowercase "a" - a clean ring bowl with a
-  flush stem. Content sits inside the 72x72 adaptive-icon safe zone.
--->
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Bowl: outer circle with the counter punched out. -->
-    <path
-        android:fillColor="#112938"
-        android:fillType="evenOdd"
-        android:pathData="M25,62 a21,21 0 1,0 42,0 a21,21 0 1,0 -42,0 Z
-                          M36,62 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
-
-    <!-- Stem, flush to the right of the bowl. -->
-    <path
-        android:fillColor="#112938"
-        android:pathData="M62,41 h11 v42 h-11 Z" />
+    <path android:fillColor="#312B27" android:pathData="M40,20 H68 C81,20 88,27 88,40 V68 C88,81 81,88 68,88 H40 C27,88 20,81 20,68 V40 C20,27 27,20 40,20 Z" />
+    <path android:fillColor="#D9E8B5" android:fillType="evenOdd" android:pathData="M51,34 C39.4,34 30,43.4 30,55 C30,66.6 39.4,76 51,76 C62.6,76 72,66.6 72,55 C72,43.4 62.6,34 51,34 Z M51,44 C57.1,44 62,48.9 62,55 C62,61.1 57.1,66 51,66 C44.9,66 40,61.1 40,55 C40,48.9 44.9,44 51,44 Z" />
+    <path android:fillColor="#D9E8B5" android:pathData="M62,53 H72 V77 C72,80.9 69.8,83 66.5,83 C63.7,83 62,80.9 62,77 Z" />
 </vector>

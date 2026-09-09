@@ -1,39 +1,6 @@
-<!--
-  Maximal mark: the same "a", wearing the skin's signature hard offset shadow
-  plus a glitch slice through the bowl. Drawn back-to-front: magenta ghost,
-  lime letter, then the slice.
--->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Offset ghost, echoing StencilText in the app. -->
-    <path
-        android:fillColor="#FF4FD8"
-        android:fillType="evenOdd"
-        android:pathData="M31,67 a21,21 0 1,0 42,0 a21,21 0 1,0 -42,0 Z
-                          M42,67 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
-    <path
-        android:fillColor="#FF4FD8"
-        android:pathData="M68,46 h11 v42 h-11 Z" />
-
-    <!-- The letter. -->
-    <path
-        android:fillColor="#C6FF3D"
-        android:fillType="evenOdd"
-        android:pathData="M25,62 a21,21 0 1,0 42,0 a21,21 0 1,0 -42,0 Z
-                          M36,62 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
-    <path
-        android:fillColor="#C6FF3D"
-        android:pathData="M62,41 h11 v42 h-11 Z" />
-
-    <!-- Glitch slice: a hard cut across the bowl, shifted off-axis. -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M20,57 h58 v6 h-58 Z" />
-    <path
-        android:fillColor="#35D8FF"
-        android:pathData="M30,57 h34 v6 h-34 Z" />
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#C6FF3D" android:pathData="M40,20 H68 C81,20 88,27 88,40 V68 C88,81 81,88 68,88 H40 C27,88 20,81 20,68 V40 C20,27 27,20 40,20 Z" />
+    <path android:fillColor="#08080A" android:fillType="evenOdd" android:pathData="M51,34 C39.4,34 30,43.4 30,55 C30,66.6 39.4,76 51,76 C62.6,76 72,66.6 72,55 C72,43.4 62.6,34 51,34 Z M51,44 C57.1,44 62,48.9 62,55 C62,61.1 57.1,66 51,66 C44.9,66 40,61.1 40,55 C40,48.9 44.9,44 51,44 Z" />
+    <path android:fillColor="#08080A" android:pathData="M62,53 H72 V77 C72,80.9 69.8,83 66.5,83 C63.7,83 62,80.9 62,77 Z" />
 </vector>

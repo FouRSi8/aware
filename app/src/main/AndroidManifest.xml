@@ -23,13 +23,64 @@
 
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
+
+        <activity-alias
+            android:name=".launcher.OatLauncher"
+            android:enabled="true"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:icon="@mipmap/ic_launcher_cosy"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_cosy"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".launcher.SageRoseLauncher"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_sage_rose"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_sage_rose"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".launcher.PlumHearthLauncher"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_plum_hearth"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_plum_hearth"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".launcher.MaximalLauncher"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_maximal"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_maximal"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <receiver
             android:name=".sms.TransactionSmsReceiver"
