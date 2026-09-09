@@ -33,6 +33,14 @@ user supplies a Groq key, aware may send redacted merchant context and category
 choices. It does not send raw SMS, account numbers, UPI IDs, phone numbers,
 transaction references, or balances.
 
+## App updates
+
+aware checks the public GitHub Releases API once a week while connected to a
+network, and whenever the user chooses **Check for updates**. This request sends
+only standard network metadata and the installed app version; it contains no
+financial data. An APK is downloaded only after the user approves an available
+release, and Android's system installer always asks for final confirmation.
+
 ## Reporting a privacy issue
 
 Please use GitHub's private security-reporting facility when available. Do not

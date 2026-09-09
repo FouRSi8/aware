@@ -54,6 +54,11 @@ import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.launch
 import android.widget.Toast
 import androidx.glance.appwidget.updateAll
+import android.os.Build
+import com.aware.app.update.AppRelease
+import com.aware.app.update.AppUpdater
+import com.aware.app.update.UpdateCheckResult
+import com.aware.app.update.UpdateCheckWorker
 
 class MainActivity : FragmentActivity() {
     private var unlocked by mutableStateOf(false)
@@ -63,6 +68,7 @@ class MainActivity : FragmentActivity() {
     private var paymentNotificationAccessGranted by mutableStateOf(false)
     private var launcherSkin = Skin.COZY
     private var launcherCozyPalette = CozyPalette.OAT_GARDEN
+    private var incomingUpdateCheck by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +97,36 @@ class MainActivity : FragmentActivity() {
             var csvBytes by remember { mutableStateOf<ByteArray?>(null) }
             var backupBytes by remember { mutableStateOf<ByteArray?>(null) }
             var restoreBytes by remember { mutableStateOf<ByteArray?>(null) }
+            var showUpdatePanel by remember { mutableStateOf(false) }
+            var updateRelease by remember { mutableStateOf<AppRelease?>(null) }
+            var updateMessage by remember { mutableStateOf<String?>(null) }
+            var updateBusy by remember { mutableStateOf(false) }
+            fun checkForUpdates() {
+                showUpdatePanel = true
+                updateBusy = true
+                updateMessage = "Checking GitHub Releases…"
+                scope.launch {
+                    runCatching { AppUpdater.check() }
+                        .onSuccess { result ->
+                            updateBusy = false
+                            when (result) {
+                                is UpdateCheckResult.Available -> {
+                                    updateRelease = result.release
+                                    updateMessage = null
+                                }
+                                is UpdateCheckResult.Current -> {
+                                    updateRelease = null
+                                    updateMessage = "You’re using the latest version of aware."
+                                }
+                            }
+                        }
+                        .onFailure {
+                            updateBusy = false
+                            updateRelease = null
+                            updateMessage = "Couldn’t check for updates. Check your connection and try again."
+                        }
+                }
+            }
             val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
                 uri?.let { target -> csvBytes?.let { contentResolver.openOutputStream(target)?.use { out -> out.write(it) } } }
                 csvBytes = null
@@ -229,6 +265,33 @@ class MainActivity : FragmentActivity() {
                                 .onFailure { Toast.makeText(this@MainActivity, "Wrong password or invalid backup", Toast.LENGTH_LONG).show() }
                         }
                     },
+                    showUpdatePanel = showUpdatePanel,
+                    updateRelease = updateRelease,
+                    updateMessage = updateMessage,
+                    updateBusy = updateBusy,
+                    onCheckForUpdates = ::checkForUpdates,
+                    onInstallUpdate = { release ->
+                        if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+                            Toast.makeText(this@MainActivity, "Allow installs from aware, then tap install again", Toast.LENGTH_LONG).show()
+                            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                        } else {
+                            updateBusy = true
+                            updateMessage = "Downloading aware ${release.version}…"
+                            scope.launch {
+                                runCatching { AppUpdater.download(this@MainActivity, release) }
+                                    .onSuccess { apk ->
+                                        updateBusy = false
+                                        startActivity(AppUpdater.installIntent(this@MainActivity, apk))
+                                    }
+                                    .onFailure {
+                                        updateBusy = false
+                                        updateMessage = "Download failed. Check your connection and try again."
+                                        Toast.makeText(this@MainActivity, updateMessage, Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        }
+                    },
+                    onDismissUpdate = { if (!updateBusy) showUpdatePanel = false },
                     ) else PrivateLockScreen(onUnlock = ::requestUnlock)
                 }
             }
@@ -237,6 +300,12 @@ class MainActivity : FragmentActivity() {
                 incomingReviewCandidateId?.let {
                     viewModel.openReview(it)
                     incomingReviewCandidateId = null
+                }
+            }
+            LaunchedEffect(incomingUpdateCheck, unlocked) {
+                if (incomingUpdateCheck && unlocked) {
+                    incomingUpdateCheck = false
+                    checkForUpdates()
                 }
             }
         }
@@ -251,6 +320,7 @@ class MainActivity : FragmentActivity() {
     private fun consumeLaunchIntent(intent: Intent?) {
         incomingReviewCandidateId = intent?.getLongExtra("reviewCandidateId", -1L)?.takeIf { it > 0 }
         incomingWidgetTransactionId = intent?.getLongExtra("transactionId", -1L)?.takeIf { it > 0 }
+        incomingUpdateCheck = intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_OPEN_UPDATE, false) == true
     }
 
     override fun onResume() {

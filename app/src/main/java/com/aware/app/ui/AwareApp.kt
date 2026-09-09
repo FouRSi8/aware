@@ -91,6 +91,8 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
@@ -138,6 +140,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import com.aware.app.BuildConfig
+import com.aware.app.update.AppRelease
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
@@ -263,6 +267,13 @@ fun AwareApp(
     onChooseRestore: () -> Unit,
     restoreReady: Boolean,
     onRestore: (String) -> Unit,
+    showUpdatePanel: Boolean,
+    updateRelease: AppRelease?,
+    updateMessage: String?,
+    updateBusy: Boolean,
+    onCheckForUpdates: () -> Unit,
+    onInstallUpdate: (AppRelease) -> Unit,
+    onDismissUpdate: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     val review by viewModel.reviewCandidate.collectAsState()
@@ -355,7 +366,8 @@ fun AwareApp(
                     },
                     { showAccountManager = true }, { showCategoryForIncome = it }, { showGroqKey = true }, { showBackupPassword = true }, onExportCsv, onChooseRestore,
                     { showOpenSourceNotice = true }, appearance, { showAppearance = true },
-                    skin, { showSkin = true }, cozyPalette, { showCozyPalette = true }, Modifier.padding(padding),
+                    skin, { showSkin = true }, cozyPalette, { showCozyPalette = true },
+                    onCheckForUpdates, Modifier.padding(padding),
                 )
             }
         }
@@ -459,6 +471,50 @@ fun AwareApp(
                 selectedTransaction = null
             },
         )
+    }
+
+    if (showUpdatePanel) AwareDialog("App update", onDismissUpdate) {
+        when {
+            updateBusy -> {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+                    Text(updateMessage ?: "Checking GitHub Releases…")
+                }
+            }
+            updateRelease != null -> {
+                Text(
+                    "aware ${updateRelease.version} is available",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (updateRelease.notes.isNotBlank()) {
+                    Text(
+                        updateRelease.notes.take(700),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
+                    )
+                }
+                Text(
+                    "Android will ask you to confirm the installation. Your data stays in place.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                )
+                Button(
+                    onClick = { onInstallUpdate(updateRelease) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+                ) { Text("Download and install") }
+            }
+            else -> {
+                Text(updateMessage ?: "You’re using the latest version of aware.")
+                Text("Installed version ${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = onCheckForUpdates, modifier = Modifier.fillMaxWidth()) { Text("Check again") }
+            }
+        }
     }
     if (showNotificationAccessDisclosure) AwareDialog("Capture payment notifications", { showNotificationAccessDisclosure = false }) {
         Text(
@@ -1812,6 +1868,7 @@ private fun SettingsScreen(
     onSkin: () -> Unit,
     cozyPalette: CozyPalette,
     onCozyPalette: () -> Unit,
+    onCheckForUpdates: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp)) {
@@ -1850,6 +1907,7 @@ private fun SettingsScreen(
                 AwareSettingsLink(Icons.Default.Sms, "Transaction SMS", if (smsGranted) "On · manage" else "Enable", LocalTokens.current.accent, onRequestSms)
                 AwareSettingsLink(Icons.Default.Notifications, "Payment notifications", if (paymentNotificationAccessGranted) "On · manage" else "Enable", LocalTokens.current.info, onRequestPaymentNotifications)
                 AwareSettingsLink(Icons.Default.AutoGraph, "AI categorisation", if (groqConfigured) "On" else "Off", LocalTokens.current.positive, onAddGroqKey)
+                AwareSettingsLink(Icons.Default.SystemUpdate, "App updates", "v${BuildConfig.VERSION_NAME} · weekly checks", LocalTokens.current.hero, onCheckForUpdates)
             }
         }
         item { AwareSettingsSection("DATA") }

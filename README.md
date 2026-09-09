@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.2.7" src="https://img.shields.io/badge/latest-v1.2.7-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.3.0" src="https://img.shields.io/badge/latest-v1.3.0-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -83,10 +83,9 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest version available: v1.2.7.** The newest source is always on
-> [`main`](https://github.com/FouRSi8/aware/tree/main). This version makes the
-> full home-screen widget open aware while preserving the pending-payment
-> review action.
+> **Latest version available: v1.3.0.** The newest source is always on
+> [`main`](https://github.com/FouRSi8/aware/tree/main). This version adds an
+> in-app GitHub updater with manual and weekly release checks.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps and SMS permission;

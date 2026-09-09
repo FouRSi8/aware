@@ -18,6 +18,7 @@ import com.aware.app.data.BudgetAlertWorker
 import com.aware.app.data.WeeklyReportWorker
 import androidx.glance.appwidget.updateAll
 import com.aware.app.widget.AwareWidget
+import com.aware.app.update.UpdateCheckWorker
 
 class AwareApplication : Application() {
     lateinit var container: AppContainer
@@ -45,6 +46,7 @@ class AwareApplication : Application() {
         RecurringWorker.schedule(this)
         BudgetAlertWorker.schedule(this)
         WeeklyReportWorker.schedule(this)
+        UpdateCheckWorker.schedule(this)
     }
 }
 

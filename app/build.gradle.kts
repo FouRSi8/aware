@@ -13,8 +13,8 @@ android {
         applicationId = "com.aware.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.2.7"
+        versionCode = 11
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -36,7 +36,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures.compose = true
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
 }
 
