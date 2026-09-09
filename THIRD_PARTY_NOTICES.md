@@ -1,18 +1,15 @@
 # Third-party notices
 
-## Dime
+## Historical source notice
 
-aware incorporates design concepts and adapted vector artwork from
-[Dime](https://github.com/rafsoh/dimeApp), an open-source personal finance
-tracker created by Rafael Soh and contributors.
+Earlier revisions of this repository experimented with design concepts and
+adapted navigation vectors from
+[Dime](https://github.com/rafsoh/dimeApp) by Rafael Soh and contributors,
+licensed under GNU GPL-3.0. That artwork was removed and replaced with standard
+Material icons in September 2026. This notice remains so the public history is
+accurate; it does not describe artwork shipped by the current revision.
 
-- Source: https://github.com/rafsoh/dimeApp
-- Upstream license: GNU General Public License, version 3
-- Local modifications: the SwiftUI design system and selected navigation
-  artwork were adapted for Android and Jetpack Compose in September 2026.
-- No Apple proprietary fonts are redistributed.
-
-The complete upstream license is available in the repository's `LICENSE` file.
+The complete GPL-3.0 text is available in the repository's `LICENSE` file.
 
 ## Manrope
 

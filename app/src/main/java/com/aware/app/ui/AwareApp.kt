@@ -67,7 +67,6 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sms
@@ -75,6 +74,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ArrowOutward
 import androidx.compose.material.icons.filled.SouthWest
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -147,7 +147,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
@@ -161,8 +160,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.annotation.DrawableRes
-import com.aware.app.R
 import com.aware.app.data.AccountEntity
 import com.aware.app.data.AccountKind
 import com.aware.app.data.BudgetBucketEntity
@@ -208,14 +205,13 @@ import kotlinx.coroutines.delay
 
 private enum class Tab(
     val label: String,
-    @DrawableRes val outlineIcon: Int,
-    @DrawableRes val filledIcon: Int,
+    val icon: ImageVector,
 ) {
-    HOME("Log", R.drawable.dime_log_outline, R.drawable.dime_log_filled),
-    ACTIVITY("Activity", R.drawable.dime_log_outline, R.drawable.dime_log_filled),
-    PLAN("Budgets", R.drawable.dime_budget_outline, R.drawable.dime_budget_filled),
-    INSIGHTS("Insights", R.drawable.dime_insights_outline, R.drawable.dime_insights_filled),
-    SETTINGS("Settings", R.drawable.dime_settings_outline, R.drawable.dime_settings_filled),
+    HOME("Log", Icons.Default.Home),
+    ACTIVITY("Activity", Icons.AutoMirrored.Filled.ReceiptLong),
+    PLAN("Budgets", Icons.Default.Savings),
+    INSIGHTS("Insights", Icons.Default.AutoGraph),
+    SETTINGS("Settings", Icons.Default.Settings),
 }
 
 private enum class SummaryPeriod(val label: String) {
@@ -585,7 +581,7 @@ private fun BottomDestination(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            painterResource(if (active) tab.filledIcon else tab.outlineIcon),
+            tab.icon,
             tab.label,
             Modifier.graphicsLayer { scaleX = scale; scaleY = scale }.size(25.dp),
             tint = contentColor,
@@ -631,7 +627,7 @@ private fun HomeScreen(
     val accountsById = remember(state.accounts) { state.accounts.associateBy { it.id } }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 26.dp)) {
         item {
-            DimeTopBar(
+            AwareTopBar(
                 period = period,
                 onPeriod = { period = it },
                 onSearch = onOpenActivity,
@@ -661,19 +657,19 @@ private fun HomeScreen(
                 }
             }
         }
-        item { DimeNetHeader(state, period) }
+        item { AwareBalanceHeader(state, period) }
         if (state.pending.isNotEmpty()) {
-            item { DimeSectionHeader("UPCOMING", "${state.pending.size} TO REVIEW") }
+            item { AwareSectionHeader("UPCOMING", "${state.pending.size} TO REVIEW") }
             items(state.pending.take(3), key = { "capture-${it.id}" }) { candidate ->
-                DimeCaptureRow(candidate) { onReview(candidate.id) }
+                AwareCaptureRow(candidate) { onReview(candidate.id) }
             }
         }
         if (visibleTransactions.isEmpty()) {
-            item { DimeSectionHeader(period.label.uppercase(), money(0)) }
+            item { AwareSectionHeader(period.label.uppercase(), money(0)) }
             item { EmptyHint("Your log is empty", "Press the plus button or let your next payment arrive.", Icons.Default.Inbox) }
         } else {
             grouped.forEach { (date, transactions) ->
-                item(key = "home-$date") { DimeDateHeader(date, transactions) }
+                item(key = "home-$date") { AwareDateHeader(date, transactions) }
                 items(transactions, key = { it.id }, contentType = { "txn" }) {
                     TransactionRow(it, categoriesById, accountsById, onClick = { onEditTransactionDate(it) })
                 }
@@ -688,7 +684,7 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun DimeTopBar(
+private fun AwareTopBar(
     period: SummaryPeriod,
     onPeriod: (SummaryPeriod) -> Unit,
     onSearch: () -> Unit,
@@ -739,7 +735,7 @@ private fun DimeTopBar(
 }
 
 @Composable
-private fun DimeNetHeader(state: MainUiState, period: SummaryPeriod) {
+private fun AwareBalanceHeader(state: MainUiState, period: SummaryPeriod) {
     val snapshot = remember(state.transactions, period) { summarizePeriod(state.transactions, period) }
     val t = LocalTokens.current
     // The console skin reads as instrumentation, not a colour block: the hero
@@ -846,7 +842,7 @@ private fun HeroFooterMetric(label: String, value: String, onHero: Color, muted:
 }
 
 @Composable
-private fun DimeSectionHeader(label: String, trailing: String) {
+private fun AwareSectionHeader(label: String, trailing: String) {
     val t = LocalTokens.current
     Row(
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 19.dp, bottom = 7.dp),
@@ -872,7 +868,7 @@ private fun DimeSectionHeader(label: String, trailing: String) {
 }
 
 @Composable
-private fun DimeDateHeader(date: LocalDate, transactions: List<TransactionEntity>) {
+private fun AwareDateHeader(date: LocalDate, transactions: List<TransactionEntity>) {
     val net = transactions.sumOf {
         when (it.type) {
             TransactionType.INCOME, TransactionType.REFUND -> it.amountPaise
@@ -885,11 +881,11 @@ private fun DimeDateHeader(date: LocalDate, transactions: List<TransactionEntity
         LocalDate.now().minusDays(1) -> "YESTERDAY"
         else -> date.format(DateTimeFormatter.ofPattern("EEE, d MMM")).uppercase()
     }
-    DimeSectionHeader(label, (if (net > 0) "+" else if (net < 0) "−" else "") + money(kotlin.math.abs(net)))
+    AwareSectionHeader(label, (if (net > 0) "+" else if (net < 0) "−" else "") + money(kotlin.math.abs(net)))
 }
 
 @Composable
-private fun DimeCaptureRow(candidate: CaptureCandidateEntity, onClick: () -> Unit) {
+private fun AwareCaptureRow(candidate: CaptureCandidateEntity, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1069,7 +1065,7 @@ private fun ActivityScreen(
     val categoriesById = remember(state.categories) { state.categories.associateBy { it.id } }
     val accountsById = remember(state.accounts) { state.accounts.associateBy { it.id } }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 34.dp)) {
-        item { DimeSubpageHeader("All activity", onBack, onExportCsv) }
+        item { AwareSubpageHeader("All activity", onBack, onExportCsv) }
         item { MonthControl(month, { month = month.minusMonths(1) }, { month = month.plusMonths(1) }) }
         item { ActivityMonthSummary(monthSpent, filtered.size) }
         item {
@@ -1121,7 +1117,7 @@ private fun ActivityScreen(
 }
 
 @Composable
-private fun DimeSubpageHeader(title: String, onBack: () -> Unit, onExport: () -> Unit) {
+private fun AwareSubpageHeader(title: String, onBack: () -> Unit, onExport: () -> Unit) {
     Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp)) {
         Breadcrumb("ledger / activity")
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1225,7 +1221,7 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
             ConsoleRule(Modifier.padding(top = 10.dp))
             }
         }
-        item { DimeBudgetGauge(totalSpent, totalCap) }
+        item { AwareBudgetGauge(totalSpent, totalCap) }
         if (state.budgets.isEmpty()) {
             item { EmptyHint("No budgets yet", "Create a budget and aware will keep the period visible.", Icons.Default.Tune) }
         } else {
@@ -1236,7 +1232,7 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         pair.forEach { budget ->
-                            DimeBudgetCard(budget, spentByBudget[budget.id] ?: 0L, categoriesById, Modifier.weight(1f))
+                            AwareBudgetCard(budget, spentByBudget[budget.id] ?: 0L, categoriesById, Modifier.weight(1f))
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
@@ -1252,13 +1248,13 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
                 TextButton(onClick = onRecurring) { Text("+ Add", fontWeight = FontWeight.SemiBold) }
             }
         }
-        if (state.recurring.isEmpty()) item { EmptyHint("Nothing scheduled", "Add salary, family support, subscriptions, or any repeating entry.", Icons.Default.ReceiptLong) }
+        if (state.recurring.isEmpty()) item { EmptyHint("Nothing scheduled", "Add salary, family support, subscriptions, or any repeating entry.", Icons.AutoMirrored.Filled.ReceiptLong) }
         else items(state.recurring, key = { it.id }) { RecurringRow(it, state.categories) }
     }
 }
 
 @Composable
-private fun DimeBudgetGauge(spent: Long, cap: Long) {
+private fun AwareBudgetGauge(spent: Long, cap: Long) {
     val target = if (cap <= 0) 0f else (spent.toFloat() / cap).coerceIn(0f, 1f)
     val progress by animateFloatAsState(target, spring(dampingRatio = .82f, stiffness = Spring.StiffnessLow), label = "overall-budget")
     val track = MaterialTheme.colorScheme.surface
@@ -1305,7 +1301,7 @@ private fun DimeBudgetGauge(spent: Long, cap: Long) {
 }
 
 @Composable
-private fun DimeBudgetCard(
+private fun AwareBudgetCard(
     budget: BudgetBucketEntity,
     spent: Long,
     categoriesById: Map<Long, CategoryEntity>,
@@ -1405,20 +1401,20 @@ private fun InsightsScreen(
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DimeInsightTile("↗", "Income", income, LocalTokens.current.positive, Modifier.weight(1f))
-                    DimeInsightTile("↘", "Expenses", spent, LocalTokens.current.negative, Modifier.weight(1f))
+                    AwareInsightTile("↗", "Income", income, LocalTokens.current.positive, Modifier.weight(1f))
+                    AwareInsightTile("↘", "Expenses", spent, LocalTokens.current.negative, Modifier.weight(1f))
                 }
             }
         }
-        item { DimeBarChart(bars, Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
+        item { AwareBarChart(bars, Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
         item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                 ChoiceRow(InsightDimension.entries, dimension, label = { it.label }) { dimension = it }
                 Spacer(Modifier.height(12.dp))
                 when (dimension) {
-                    InsightDimension.CATEGORY -> DimeCategoryBreakdown(byCategory, categoriesById)
-                    InsightDimension.PAYEE -> DimeNamedBreakdown("Spending by payee", byPayee, spent)
-                    InsightDimension.TAG -> DimeNamedBreakdown("Spending by tag", byTag, spent, emptyMessage = "Add tags to transactions to see them here.")
+                    InsightDimension.CATEGORY -> AwareCategoryBreakdown(byCategory, categoriesById)
+                    InsightDimension.PAYEE -> AwareNamedBreakdown("Spending by payee", byPayee, spent)
+                    InsightDimension.TAG -> AwareNamedBreakdown("Spending by tag", byTag, spent, emptyMessage = "Add tags to transactions to see them here.")
                 }
             }
         }
@@ -1440,7 +1436,7 @@ private fun InsightsScreen(
                 ) { Text("Compare months", fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
             }
         }
-        item { DimeSectionHeader("ACTIVITY", "${periodTransactions.size} ENTRIES") }
+        item { AwareSectionHeader("ACTIVITY", "${periodTransactions.size} ENTRIES") }
         items(periodTransactions.take(5), key = { "insight-${it.id}" }, contentType = { "txn" }) {
             TransactionRow(it, categoriesById, accountsById, onClick = { onEditTransactionDate(it) })
         }
@@ -1451,7 +1447,7 @@ private fun InsightsScreen(
 }
 
 @Composable
-private fun DimeInsightTile(symbol: String, label: String, amount: Long, accent: Color, modifier: Modifier = Modifier) {
+private fun AwareInsightTile(symbol: String, label: String, amount: Long, accent: Color, modifier: Modifier = Modifier) {
     Surface(modifier, awareShape(10.dp), MaterialTheme.colorScheme.surface) {
         Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(30.dp).clip(awareShape(8.dp)).background(accent.copy(.2f)), contentAlignment = Alignment.Center) {
@@ -1467,7 +1463,7 @@ private fun DimeInsightTile(symbol: String, label: String, amount: Long, accent:
 }
 
 @Composable
-private fun DimeBarChart(bars: List<Pair<String, Long>>, modifier: Modifier = Modifier) {
+private fun AwareBarChart(bars: List<Pair<String, Long>>, modifier: Modifier = Modifier) {
     val t = LocalTokens.current
     val peak = bars.maxOfOrNull { it.second } ?: 0L
     // Round the top of the scale up to a 1/2/5 step so the axis reads
@@ -1535,7 +1531,7 @@ private fun DimeBarChart(bars: List<Pair<String, Long>>, modifier: Modifier = Mo
 }
 
 @Composable
-private fun DimeCategoryBreakdown(
+private fun AwareCategoryBreakdown(
     values: List<Pair<Long?, Long>>,
     categoriesById: Map<Long, CategoryEntity>,
     modifier: Modifier = Modifier,
@@ -1619,7 +1615,7 @@ private fun DimeCategoryBreakdown(
 }
 
 @Composable
-private fun DimeNamedBreakdown(
+private fun AwareNamedBreakdown(
     title: String,
     values: List<Pair<String, Long>>,
     total: Long,
@@ -1681,38 +1677,38 @@ private fun SettingsScreen(
                 MachineLabel("private // local // entirely yours")
             }
         }
-        item { DimeSettingsSection("LOOK") }
+        item { AwareSettingsSection("LOOK") }
         item {
-            DimeSettingsGroup {
-                DimeSettingsLink(Icons.Default.Palette, "Theme", skin.label, LocalTokens.current.pink, onSkin)
-                DimeSettingsLink(Icons.Default.Contrast, "Appearance", appearance.label, LocalTokens.current.violet, onAppearance)
+            AwareSettingsGroup {
+                AwareSettingsLink(Icons.Default.Palette, "Theme", skin.label, LocalTokens.current.pink, onSkin)
+                AwareSettingsLink(Icons.Default.Contrast, "Appearance", appearance.label, LocalTokens.current.violet, onAppearance)
             }
         }
-        item { DimeSettingsSection("GENERAL") }
+        item { AwareSettingsSection("GENERAL") }
         item {
-            DimeSettingsGroup {
-                DimeSettingsLink(Icons.Default.AccountBalanceWallet, "Accounts & wallets", "${state.accounts.size} saved", LocalTokens.current.hero, onAddAccount)
-                DimeSettingsLink(Icons.Default.ShoppingBag, "New spending category", "Custom", LocalTokens.current.warn) { onAddCategory(false) }
-                DimeSettingsLink(Icons.Default.Savings, "New income category", "Custom", LocalTokens.current.positive) { onAddCategory(true) }
-                DimeSettingsValue(Icons.Default.CurrencyRupee, "Currency", "Indian rupee", LocalTokens.current.warn)
-                DimeSettingsToggle(Icons.Default.Notifications, "Budget nudges", smartNudgesEnabled, LocalTokens.current.negative, onToggleNudges)
-                DimeSettingsToggle(Icons.Default.Lock, "Unlock with biometrics", appLockEnabled, LocalTokens.current.info, onToggleAppLock)
+            AwareSettingsGroup {
+                AwareSettingsLink(Icons.Default.AccountBalanceWallet, "Accounts & wallets", "${state.accounts.size} saved", LocalTokens.current.hero, onAddAccount)
+                AwareSettingsLink(Icons.Default.ShoppingBag, "New spending category", "Custom", LocalTokens.current.warn) { onAddCategory(false) }
+                AwareSettingsLink(Icons.Default.Savings, "New income category", "Custom", LocalTokens.current.positive) { onAddCategory(true) }
+                AwareSettingsValue(Icons.Default.CurrencyRupee, "Currency", "Indian rupee", LocalTokens.current.warn)
+                AwareSettingsToggle(Icons.Default.Notifications, "Budget nudges", smartNudgesEnabled, LocalTokens.current.negative, onToggleNudges)
+                AwareSettingsToggle(Icons.Default.Lock, "Unlock with biometrics", appLockEnabled, LocalTokens.current.info, onToggleAppLock)
             }
         }
-        item { DimeSettingsSection("AUTOMATION") }
+        item { AwareSettingsSection("AUTOMATION") }
         item {
-            DimeSettingsGroup {
-                DimeSettingsLink(Icons.Default.Sms, "Transaction SMS", if (smsGranted) "On · manage" else "Enable", LocalTokens.current.accent, onRequestSms)
-                DimeSettingsLink(Icons.Default.AutoGraph, "AI categorisation", if (groqConfigured) "On" else "Off", LocalTokens.current.positive, onAddGroqKey)
+            AwareSettingsGroup {
+                AwareSettingsLink(Icons.Default.Sms, "Transaction SMS", if (smsGranted) "On · manage" else "Enable", LocalTokens.current.accent, onRequestSms)
+                AwareSettingsLink(Icons.Default.AutoGraph, "AI categorisation", if (groqConfigured) "On" else "Off", LocalTokens.current.positive, onAddGroqKey)
             }
         }
-        item { DimeSettingsSection("DATA") }
+        item { AwareSettingsSection("DATA") }
         item {
-            DimeSettingsGroup {
-                DimeSettingsLink(Icons.Default.FileDownload, "Export data", "CSV", LocalTokens.current.hero, onExportCsv)
-                DimeSettingsLink(Icons.Default.Shield, "Encrypted backup", "Create", LocalTokens.current.violet, onBackup)
-                DimeSettingsLink(Icons.Default.Restore, "Restore backup", "Choose file", LocalTokens.current.warn, onRestore)
-                DimeSettingsLink(Icons.Default.Lightbulb, "Open-source notices", "GPL-3.0", LocalTokens.current.positive, onOpenSourceNotices)
+            AwareSettingsGroup {
+                AwareSettingsLink(Icons.Default.FileDownload, "Export data", "CSV", LocalTokens.current.hero, onExportCsv)
+                AwareSettingsLink(Icons.Default.Shield, "Encrypted backup", "Create", LocalTokens.current.violet, onBackup)
+                AwareSettingsLink(Icons.Default.Restore, "Restore backup", "Choose file", LocalTokens.current.warn, onRestore)
+                AwareSettingsLink(Icons.Default.Lightbulb, "Open-source notices", "GPL-3.0", LocalTokens.current.positive, onOpenSourceNotices)
             }
         }
         item {
@@ -1745,7 +1741,7 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun DimeSettingsSection(title: String) {
+private fun AwareSettingsSection(title: String) {
     val t = LocalTokens.current
     Row(
         Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
@@ -1768,7 +1764,7 @@ private fun DimeSettingsSection(title: String) {
 }
 
 @Composable
-private fun DimeSettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+private fun AwareSettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     val t = LocalTokens.current
     Surface(
         Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
@@ -1781,7 +1777,7 @@ private fun DimeSettingsGroup(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun DimeSettingsLink(icon: ImageVector, title: String, value: String, color: Color, onClick: () -> Unit) {
+private fun AwareSettingsLink(icon: ImageVector, title: String, value: String, color: Color, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(30.dp).clip(awareShape(7.dp)).background(color), contentAlignment = Alignment.Center) {
             Icon(icon, null, Modifier.size(17.dp), tint = readableAccent(LocalTokens.current.onAccent, color))
@@ -1795,11 +1791,11 @@ private fun DimeSettingsLink(icon: ImageVector, title: String, value: String, co
 }
 
 /**
- * A row that flips a boolean. These used to be [DimeSettingsLink]s showing a
+ * A row that flips a boolean. These used to be [AwareSettingsLink]s showing a
  * chevron, which promised a sub-screen that never existed.
  */
 @Composable
-private fun DimeSettingsToggle(icon: ImageVector, title: String, checked: Boolean, color: Color, onToggle: () -> Unit) {
+private fun AwareSettingsToggle(icon: ImageVector, title: String, checked: Boolean, color: Color, onToggle: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1818,7 +1814,7 @@ private fun DimeSettingsToggle(icon: ImageVector, title: String, checked: Boolea
 }
 
 @Composable
-private fun DimeSettingsValue(icon: ImageVector, title: String, value: String, color: Color) {
+private fun AwareSettingsValue(icon: ImageVector, title: String, value: String, color: Color) {
     Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(30.dp).clip(awareShape(7.dp)).background(color), contentAlignment = Alignment.Center) {
             Icon(icon, null, Modifier.size(17.dp), tint = readableAccent(LocalTokens.current.onAccent, color))
@@ -1832,15 +1828,15 @@ private fun DimeSettingsValue(icon: ImageVector, title: String, value: String, c
 @Composable
 private fun OpenSourceNoticeDialog(onDismiss: () -> Unit) {
     AwareDialog("Open-source notices", onDismiss) {
-        Text("Dime", style = MaterialTheme.typography.titleLarge)
-        Text("Design concepts and selected navigation artwork are adapted from Dime by Rafael Soh and contributors.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("aware", style = MaterialTheme.typography.titleLarge)
+        Text("The current interface uses aware Compose components and standard Material iconography.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(Modifier.fillMaxWidth(), awareShape(12.dp), MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(16.dp)) {
                 Text("GNU General Public License v3.0", fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Text("You may run, study, share and modify this software under GPL-3.0. It is provided without warranty. Source and license notices ship with the project.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("github.com/rafsoh/dimeApp", color = LocalTokens.current.positive, fontSize = 12.sp)
+                Text("See THIRD_PARTY_NOTICES.md for dependencies and repository history.", color = LocalTokens.current.positive, fontSize = 12.sp)
             }
         }
         Text("Manrope", style = MaterialTheme.typography.titleLarge)
@@ -2150,7 +2146,7 @@ private fun AddTransactionDialog(
                 Spacer(Modifier.height(14.dp))
                 if (type !in listOf(TransactionType.TRANSFER)) {
                     val available = state.categories.filter { if (type == TransactionType.INCOME || type == TransactionType.REFUND) it.isIncome else !it.isIncome }
-                    DimeCategoryPicker(
+                    AwareCategoryPicker(
                         available, categoryId,
                         onAdd = { onAddCategory(type == TransactionType.INCOME || type == TransactionType.REFUND) },
                     ) { categoryId = it }
@@ -2173,12 +2169,12 @@ private fun AddTransactionDialog(
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Default.ReceiptLong, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.AutoMirrored.Filled.ReceiptLong, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(7.dp))
                     Text("${friendlyDate(occurredAt)} · ${state.accounts.firstOrNull { it.id == accountId }?.name ?: "Choose account"}", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     Text("Change", color = LocalTokens.current.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-                DimeNumberPad(
+                AwareNumberPad(
                     enabled = canSave,
                     submitLabel = when (type) {
                         TransactionType.INCOME -> "Add income"
@@ -2208,7 +2204,7 @@ private fun AddTransactionDialog(
 }
 
 @Composable
-private fun DimeCategoryPicker(categories: List<CategoryEntity>, selectedId: Long?, onAdd: (() -> Unit)? = null, onSelected: (Long) -> Unit) {
+private fun AwareCategoryPicker(categories: List<CategoryEntity>, selectedId: Long?, onAdd: (() -> Unit)? = null, onSelected: (Long) -> Unit) {
     val t = LocalTokens.current
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         categories.forEach { category ->
@@ -2258,12 +2254,12 @@ private fun DimeCategoryPicker(categories: List<CategoryEntity>, selectedId: Lon
 }
 
 @Composable
-private fun DimeNumberPad(enabled: Boolean, submitLabel: String, onKey: (String) -> Unit, onSubmit: () -> Unit) {
+private fun AwareNumberPad(enabled: Boolean, submitLabel: String, onKey: (String) -> Unit, onSubmit: () -> Unit) {
     val t = LocalTokens.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(".", "0", "⌫")).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { key -> DimeKey(key, Modifier.weight(1f)) { onKey(key) } }
+                row.forEach { key -> AwareKey(key, Modifier.weight(1f)) { onKey(key) } }
             }
         }
         val interaction = remember { MutableInteractionSource() }
@@ -2299,7 +2295,7 @@ private fun DimeNumberPad(enabled: Boolean, submitLabel: String, onKey: (String)
 }
 
 @Composable
-private fun DimeKey(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun AwareKey(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .93f else 1f, spring(dampingRatio = .72f, stiffness = Spring.StiffnessMedium), label = "key-$label")
@@ -2388,7 +2384,7 @@ private fun BudgetDialog(
             BudgetScope.CATEGORY -> {
                 Label("Category")
                 val spendingCategories = state.categories.filterNot { it.isIncome }
-                DimeCategoryPicker(spendingCategories, categoryId, onAdd = onAddCategory) { selected ->
+                AwareCategoryPicker(spendingCategories, categoryId, onAdd = onAddCategory) { selected ->
                     categoryId = selected
                     if (name.isBlank()) name = spendingCategories.firstOrNull { it.id == selected }?.name.orEmpty()
                 }
@@ -2468,7 +2464,7 @@ private fun RecurringDialog(
         Label("Account")
         ScrollChoices(state.accounts, accountId, { it.id }, { it.name }, onAdd = onAddAccount) { accountId = it.id }
         Label("Category")
-        DimeCategoryPicker(
+        AwareCategoryPicker(
             state.categories.filter { it.isIncome == (type == TransactionType.INCOME) },
             categoryId,
             onAdd = { onAddCategory(type == TransactionType.INCOME) },
@@ -2696,7 +2692,7 @@ private fun CandidateReviewDialog(
         ScrollChoices(state.accounts, accountId, { it.id }, { it.name }, onAdd = onAddAccount) { accountId = it.id }
         if (candidate.type != TransactionType.TRANSFER) {
             Label("Category")
-            DimeCategoryPicker(
+            AwareCategoryPicker(
                 state.categories.filter { it.isIncome == (candidate.type == TransactionType.INCOME || candidate.type == TransactionType.REFUND) },
                 categoryId,
                 onAdd = { onAddCategory(candidate.type == TransactionType.INCOME || candidate.type == TransactionType.REFUND) },

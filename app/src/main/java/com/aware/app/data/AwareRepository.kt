@@ -49,19 +49,19 @@ class AwareRepository(
             database.accountDao().insert(AccountEntity(name = "Cash wallet", kind = AccountKind.CASH))
         }
         val defaults = listOf(
-            // Dime's expressive category palette, adapted under GPL-3.0.
-            CategoryEntity(name = "Food delivery", emoji = "🛵", colorArgb = 0xFFEC7A58L),
-            CategoryEntity(name = "Groceries", emoji = "🛒", colorArgb = 0xFF5FAF9FL),
-            CategoryEntity(name = "Dining", emoji = "🍜", colorArgb = 0xFFF3BF56L),
-            CategoryEntity(name = "Travel", emoji = "🚇", colorArgb = 0xFF279AF4L),
-            CategoryEntity(name = "Family", emoji = "💜", colorArgb = 0xFFC56AF7L),
-            CategoryEntity(name = "Shopping", emoji = "🛍️", colorArgb = 0xFFED80A2L),
-            CategoryEntity(name = "Subscriptions", emoji = "🔁", colorArgb = 0xFF6E7BF1L),
-            CategoryEntity(name = "Health", emoji = "💊", colorArgb = 0xFF7CB0AAL),
-            CategoryEntity(name = "Education", emoji = "🎓", colorArgb = 0xFFA0ACF9L),
-            CategoryEntity(name = "Flexible", emoji = "✨", colorArgb = 0xFFF6D489L),
-            CategoryEntity(name = "Salary", emoji = "💸", colorArgb = 0xFF03CD86L, isIncome = true),
-            CategoryEntity(name = "Other income", emoji = "➕", colorArgb = 0xFF61C7FAL, isIncome = true),
+            // aware's balanced ledger palette: distinct at a glance in both appearances.
+            CategoryEntity(name = "Food delivery", emoji = "🛵", colorArgb = 0xFFD97762L),
+            CategoryEntity(name = "Groceries", emoji = "🛒", colorArgb = 0xFF7B9E87L),
+            CategoryEntity(name = "Dining", emoji = "🍜", colorArgb = 0xFFD9A441L),
+            CategoryEntity(name = "Travel", emoji = "🚇", colorArgb = 0xFF6E8FB3L),
+            CategoryEntity(name = "Family", emoji = "💜", colorArgb = 0xFFA67C91L),
+            CategoryEntity(name = "Shopping", emoji = "🛍️", colorArgb = 0xFFC97B84L),
+            CategoryEntity(name = "Subscriptions", emoji = "🔁", colorArgb = 0xFF7C74A8L),
+            CategoryEntity(name = "Health", emoji = "💊", colorArgb = 0xFF82A39AL),
+            CategoryEntity(name = "Education", emoji = "🎓", colorArgb = 0xFF8796C7L),
+            CategoryEntity(name = "Flexible", emoji = "✨", colorArgb = 0xFFC8A96BL),
+            CategoryEntity(name = "Salary", emoji = "💸", colorArgb = 0xFF3E8E6AL, isIncome = true),
+            CategoryEntity(name = "Other income", emoji = "➕", colorArgb = 0xFF5D94B8L, isIncome = true),
         )
         database.categoryDao().insertAll(defaults)
     }

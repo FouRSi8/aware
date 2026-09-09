@@ -105,12 +105,12 @@ Compose UI ←── Flow / ViewModel ←── encrypted Room ledger
 Kotlin · Jetpack Compose · Material 3 · Room · Coroutines/Flow · WorkManager ·
 Glance · DataStore · Android Keystore · SQLCipher
 
-## Open-source lineage
+## Open source
 
-aware adapts information architecture and selected navigation artwork from
-[Dime](https://github.com/rafsoh/dimeApp) by Rafael Soh and contributors.
-Dime is GPL-3.0, so aware is released under the same license. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attribution and Manrope's OFL notice.
+aware is released under GPL-3.0. The current Android interface uses aware's
+own Compose components, semantic colour system, and standard Material iconography.
+Dependency licences and the repository's historical source notice are recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Contributing
 
