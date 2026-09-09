@@ -244,6 +244,7 @@ fun AwareApp(
     smsGranted: Boolean,
     onRequestSms: () -> Unit,
     onRequestNotifications: () -> Unit,
+    onAppLockChange: (Boolean) -> Unit,
     onExportCsv: () -> Unit,
     onCreateBackup: (String) -> Unit,
     onChooseRestore: () -> Unit,
@@ -261,6 +262,9 @@ fun AwareApp(
     var showBudget by remember { mutableStateOf(false) }
     var showRecurring by remember { mutableStateOf(false) }
     var showAccount by remember { mutableStateOf(false) }
+    var showAccountManager by remember { mutableStateOf(false) }
+    var editingAccount by remember { mutableStateOf<AccountEntity?>(null) }
+    var editingTransactionDate by remember { mutableStateOf<TransactionEntity?>(null) }
     var showGroqKey by remember { mutableStateOf(false) }
     var showBackupPassword by remember { mutableStateOf(false) }
     var showRestorePassword by remember { mutableStateOf(false) }
@@ -302,9 +306,16 @@ fun AwareApp(
                     onOpenPlan = { selected = Tab.PLAN },
                     onOpenInsights = { selected = Tab.INSIGHTS },
                     onOpenSettings = { selected = Tab.SETTINGS },
+                    onEditTransactionDate = { editingTransactionDate = it },
                     modifier = Modifier.padding(padding),
                 )
-                Tab.ACTIVITY -> ActivityScreen(state, onBack = { selected = Tab.HOME }, onExportCsv = onExportCsv, Modifier.padding(padding))
+                Tab.ACTIVITY -> ActivityScreen(
+                    state,
+                    onBack = { selected = Tab.HOME },
+                    onExportCsv = onExportCsv,
+                    onEditTransactionDate = { editingTransactionDate = it },
+                    modifier = Modifier.padding(padding),
+                )
                 Tab.PLAN -> PlanScreen(state, { showBudget = true }, { showRecurring = true }, Modifier.padding(padding))
                 Tab.INSIGHTS -> InsightsScreen(
                     state,
@@ -312,14 +323,19 @@ fun AwareApp(
                     onOpenAiSetup = { showGroqKey = true },
                     onOpenMonthlyReport = { showMonthlyReport = true },
                     onOpenSettings = { selected = Tab.SETTINGS },
+                    onEditTransactionDate = { editingTransactionDate = it },
                     modifier = Modifier.padding(padding),
                 )
                 Tab.SETTINGS -> SettingsScreen(
                     state, smsGranted, groqConfigured, appLockEnabled, smartNudgesEnabled,
                     onRequestSms,
                     { viewModel.setSmartNudges(!smartNudgesEnabled); if (!smartNudgesEnabled) onRequestNotifications() },
-                    { viewModel.setAppLock(!appLockEnabled) },
-                    { showAccount = true }, { showCategoryForIncome = it }, { showGroqKey = true }, { showBackupPassword = true }, onExportCsv, onChooseRestore,
+                    {
+                        val enabled = !appLockEnabled
+                        viewModel.setAppLock(enabled)
+                        onAppLockChange(enabled)
+                    },
+                    { showAccountManager = true }, { showCategoryForIncome = it }, { showGroqKey = true }, { showBackupPassword = true }, onExportCsv, onChooseRestore,
                     { showOpenSourceNotice = true }, appearance, { showAppearance = true },
                     skin, { showSkin = true }, Modifier.padding(padding),
                 )
@@ -377,6 +393,33 @@ fun AwareApp(
         onAddAccount = { showAccount = true },
     ) { name, amount, type, account, category, cadence, interval, start, end, reminder -> viewModel.addRecurring(name, amount, type, account, category, cadence, interval, start, end, reminder); showRecurring = false }
     if (showAccount) AccountDialog({ showAccount = false }) { name, kind, opening -> viewModel.addAccount(name, kind, opening); showAccount = false }
+    if (showAccountManager) AccountManagerDialog(
+        accounts = state.accounts,
+        onDismiss = { showAccountManager = false },
+        onAdd = { editingAccount = AccountEntity(name = "", kind = AccountKind.BANK) },
+        onEdit = { editingAccount = it },
+    )
+    editingAccount?.let { account ->
+        AccountEditorDialog(
+            account = account.takeIf { it.id != 0L },
+            onDismiss = { editingAccount = null },
+            onSave = { id, name, kind, opening, isDefault ->
+                viewModel.saveAccount(id, name, kind, opening, isDefault)
+                editingAccount = null
+            },
+        )
+    }
+    editingTransactionDate?.let { transaction ->
+        AwareDatePicker(
+            title = "Transaction date",
+            initialMillis = transaction.occurredAt,
+            onDismiss = { editingTransactionDate = null },
+            onConfirm = {
+                viewModel.updateTransactionDate(transaction.id, it)
+                editingTransactionDate = null
+            },
+        )
+    }
     showCategoryForIncome?.let { isIncome ->
         CategoryDialog(isIncome, { showCategoryForIncome = null }) { name, emoji, color ->
             viewModel.addCategory(name, emoji, color, isIncome)
@@ -574,6 +617,7 @@ private fun HomeScreen(
     onOpenPlan: () -> Unit,
     onOpenInsights: () -> Unit,
     onOpenSettings: () -> Unit,
+    onEditTransactionDate: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.WEEK) }
@@ -630,7 +674,9 @@ private fun HomeScreen(
         } else {
             grouped.forEach { (date, transactions) ->
                 item(key = "home-$date") { DimeDateHeader(date, transactions) }
-                items(transactions, key = { it.id }, contentType = { "txn" }) { TransactionRow(it, categoriesById, accountsById) }
+                items(transactions, key = { it.id }, contentType = { "txn" }) {
+                    TransactionRow(it, categoriesById, accountsById, onClick = { onEditTransactionDate(it) })
+                }
             }
             item {
                 TextButton(onClick = onOpenActivity, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -944,6 +990,7 @@ private fun TransactionRow(
     // old firstOrNull scans ran once per category and account on every row.
     categoriesById: Map<Long, CategoryEntity>,
     accountsById: Map<Long, AccountEntity>,
+    onClick: (() -> Unit)? = null,
 ) {
     val category = transaction.categoryId?.let(categoriesById::get)
     val account = accountsById[transaction.accountId]
@@ -959,7 +1006,12 @@ private fun TransactionRow(
     val amountLabel = remember(transaction.id, transaction.amountPaise, transaction.type) {
         (if (incoming) "+" else if (transaction.type == TransactionType.TRANSFER) "↔ " else "−") + money(transaction.amountPaise)
     }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 20.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         val categoryColor = category?.colorArgb?.let(::Color)
             ?: if (incoming) LocalTokens.current.positive else LocalTokens.current.hero
         Box(Modifier.size(36.dp).clip(awareShape(10.dp)).background(categoryColor.copy(.27f)), contentAlignment = Alignment.Center) {
@@ -990,6 +1042,7 @@ private fun ActivityScreen(
     state: MainUiState,
     onBack: () -> Unit,
     onExportCsv: () -> Unit,
+    onEditTransactionDate: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
@@ -1059,7 +1112,9 @@ private fun ActivityScreen(
         } else {
             grouped.forEach { (date, transactions) ->
                 item(key = "date-$date") { DateGroupHeader(date, transactions) }
-                items(transactions, key = { it.id }, contentType = { "txn" }) { transaction -> TransactionRow(transaction, categoriesById, accountsById) }
+                items(transactions, key = { it.id }, contentType = { "txn" }) { transaction ->
+                    TransactionRow(transaction, categoriesById, accountsById, onClick = { onEditTransactionDate(transaction) })
+                }
             }
         }
     }
@@ -1304,6 +1359,7 @@ private fun InsightsScreen(
     onOpenAiSetup: () -> Unit,
     onOpenMonthlyReport: () -> Unit,
     onOpenSettings: () -> Unit,
+    onEditTransactionDate: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.WEEK) }
@@ -1385,7 +1441,9 @@ private fun InsightsScreen(
             }
         }
         item { DimeSectionHeader("ACTIVITY", "${periodTransactions.size} ENTRIES") }
-        items(periodTransactions.take(5), key = { "insight-${it.id}" }, contentType = { "txn" }) { TransactionRow(it, categoriesById, accountsById) }
+        items(periodTransactions.take(5), key = { "insight-${it.id}" }, contentType = { "txn" }) {
+            TransactionRow(it, categoriesById, accountsById, onClick = { onEditTransactionDate(it) })
+        }
         item {
             TextButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { Text("Open budgets →", fontWeight = FontWeight.SemiBold) }
         }
@@ -1633,7 +1691,7 @@ private fun SettingsScreen(
         item { DimeSettingsSection("GENERAL") }
         item {
             DimeSettingsGroup {
-                DimeSettingsLink(Icons.Default.AccountBalanceWallet, "Add account or wallet", "${state.accounts.size} saved", LocalTokens.current.hero, onAddAccount)
+                DimeSettingsLink(Icons.Default.AccountBalanceWallet, "Accounts & wallets", "${state.accounts.size} saved", LocalTokens.current.hero, onAddAccount)
                 DimeSettingsLink(Icons.Default.ShoppingBag, "New spending category", "Custom", LocalTokens.current.warn) { onAddCategory(false) }
                 DimeSettingsLink(Icons.Default.Savings, "New income category", "Custom", LocalTokens.current.positive) { onAddCategory(true) }
                 DimeSettingsValue(Icons.Default.CurrencyRupee, "Currency", "Indian rupee", LocalTokens.current.warn)
@@ -2437,6 +2495,116 @@ private fun AccountDialog(onDismiss: () -> Unit, onSave: (String, AccountKind, L
         OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Account or wallet name") }, colors = cozyFieldColors(), singleLine = true)
         MoneyField(balance, "Opening balance") { balance = it }
         Button(onClick = { onSave(name, kind, opening) }, enabled = name.isNotBlank(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Add source") }
+    }
+}
+
+@Composable
+private fun AccountManagerDialog(
+    accounts: List<AccountEntity>,
+    onDismiss: () -> Unit,
+    onAdd: () -> Unit,
+    onEdit: (AccountEntity) -> Unit,
+) {
+    AwareDialog("Accounts & wallets", onDismiss) {
+        Text(
+            "Every money source is yours to rename, retype, rebalance, or make the default.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        accounts.forEach { account ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { onEdit(account) },
+                shape = awareShape(14.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = if (account.isDefault) BorderStroke(1.5.dp, LocalTokens.current.accent) else null,
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(42.dp).clip(awareShape(11.dp)).background(LocalTokens.current.hero.copy(.2f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Default.AccountBalanceWallet, null, tint = readableAccent(LocalTokens.current.hero))
+                    }
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(account.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text(
+                            account.kind.name.lowercase().replaceFirstChar(Char::uppercase) +
+                                if (account.isDefault) " · Default" else "",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    Icon(Icons.Default.Edit, "Edit ${account.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Button(
+            onClick = onAdd,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LocalTokens.current.affirm,
+                contentColor = LocalTokens.current.onAffirm,
+            ),
+        ) {
+            Icon(Icons.Default.Add, null)
+            Spacer(Modifier.width(8.dp))
+            Text("Add account or wallet", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun AccountEditorDialog(
+    account: AccountEntity?,
+    onDismiss: () -> Unit,
+    onSave: (Long, String, AccountKind, Long, Boolean) -> Unit,
+) {
+    var name by remember(account?.id) { mutableStateOf(account?.name.orEmpty()) }
+    var kind by remember(account?.id) { mutableStateOf(account?.kind ?: AccountKind.BANK) }
+    var balance by remember(account?.id) {
+        mutableStateOf(
+            account?.openingBalancePaise?.let {
+                if (it % 100L == 0L) (it / 100L).toString() else String.format(Locale.US, "%.2f", it / 100.0)
+            }.orEmpty(),
+        )
+    }
+    var isDefault by remember(account?.id) { mutableStateOf(account?.isDefault ?: false) }
+    val opening = parsePaise(balance) ?: 0L
+    AwareDialog(if (account == null) "Add money source" else "Edit money source", onDismiss) {
+        ChoiceRow(AccountKind.entries, kind) { kind = it }
+        OutlinedTextField(
+            name,
+            { name = it },
+            Modifier.fillMaxWidth(),
+            label = { Text("Account or wallet name") },
+            colors = cozyFieldColors(),
+            singleLine = true,
+        )
+        MoneyField(balance, "Opening balance") { balance = it }
+        Row(
+            Modifier.fillMaxWidth().clickable { isDefault = true }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Default account", fontWeight = FontWeight.SemiBold)
+                Text("Used for SMS captures and new entries", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            }
+            Switch(checked = isDefault, onCheckedChange = { checked -> if (checked) isDefault = true })
+        }
+        Button(
+            onClick = { onSave(account?.id ?: 0L, name, kind, opening, isDefault) },
+            enabled = name.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LocalTokens.current.affirm,
+                contentColor = LocalTokens.current.onAffirm,
+            ),
+        ) {
+            Text(if (account == null) "Add source" else "Save changes")
+        }
     }
 }
 

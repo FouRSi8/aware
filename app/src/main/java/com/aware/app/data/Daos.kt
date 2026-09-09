@@ -14,6 +14,8 @@ interface AccountDao {
     @Query("SELECT * FROM accounts WHERE isDefault = 1 LIMIT 1") suspend fun defaultAccount(): AccountEntity?
     @Query("SELECT * FROM accounts WHERE kind = 'CASH' LIMIT 1") suspend fun cashAccount(): AccountEntity?
     @Query("SELECT * FROM accounts ORDER BY id") suspend fun allOnce(): List<AccountEntity>
+    @Query("SELECT * FROM accounts WHERE id = :id LIMIT 1") suspend fun byId(id: Long): AccountEntity?
+    @Query("UPDATE accounts SET isDefault = 0") suspend fun clearDefault()
     @Insert suspend fun insert(account: AccountEntity): Long
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreAll(items: List<AccountEntity>)
     @Query("DELETE FROM accounts") suspend fun clear()

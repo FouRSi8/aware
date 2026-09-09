@@ -6,15 +6,38 @@ import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aware.app.ui.AwareApp
@@ -31,15 +54,19 @@ import android.widget.Toast
 import androidx.glance.appwidget.updateAll
 
 class MainActivity : FragmentActivity() {
-    private var unlocked = false
+    private var unlocked by mutableStateOf(false)
+    private var authenticationShowing = false
     private var incomingReviewCandidateId by mutableStateOf<Long?>(null)
     private var incomingWidgetTransactionId by mutableStateOf<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val app = application as AwareApplication
+        val lockEnabled = app.container.secureStore.getBoolean("app_lock")
+        unlocked = !lockEnabled
+        if (lockEnabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         consumeLaunchIntent(intent)
         setContent {
-            val app = application as AwareApplication
             val viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory(app.container.repository, app.container.categorySuggester))
             var smsGranted by remember { mutableStateOf(ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) }
             val smsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { smsGranted = it }
@@ -83,8 +110,13 @@ class MainActivity : FragmentActivity() {
                 Appearance.LIGHT -> false
                 Appearance.DARK -> true
             }
-            AwareTheme(skin = skin, darkTheme = dark) {
-                AwareApp(
+            val baseDensity = LocalDensity.current
+            val comfortableDensity = remember(baseDensity.density, baseDensity.fontScale) {
+                Density(baseDensity.density * 1.08f, baseDensity.fontScale)
+            }
+            CompositionLocalProvider(LocalDensity provides comfortableDensity) {
+                AwareTheme(skin = skin, darkTheme = dark) {
+                    if (unlocked) AwareApp(
                     appearance = appearance,
                     onAppearanceChange = {
                         appearance = it
@@ -116,6 +148,14 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onRequestNotifications = { if (android.os.Build.VERSION.SDK_INT >= 33) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                    onAppLockChange = { enabled ->
+                        if (enabled) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                            unlocked = true
+                        }
+                    },
                     onExportCsv = {
                         scope.launch {
                             csvBytes = app.container.repository.createCsv().toByteArray()
@@ -139,9 +179,11 @@ class MainActivity : FragmentActivity() {
                                 .onFailure { Toast.makeText(this@MainActivity, "Wrong password or invalid backup", Toast.LENGTH_LONG).show() }
                         }
                     },
-                )
+                    ) else PrivateLockScreen(onUnlock = ::requestUnlock)
+                }
             }
-            LaunchedEffect(incomingReviewCandidateId) {
+            LaunchedEffect(incomingReviewCandidateId, unlocked) {
+                if (!unlocked) return@LaunchedEffect
                 incomingReviewCandidateId?.let {
                     viewModel.openReview(it)
                     incomingReviewCandidateId = null
@@ -164,12 +206,42 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         val app = application as? AwareApplication ?: return
-        if (!app.container.secureStore.getBoolean("app_lock") || unlocked) return
+        val lockEnabled = app.container.secureStore.getBoolean("app_lock")
+        if (!lockEnabled) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            unlocked = true
+            return
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (unlocked) return
+        requestUnlock()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val app = application as? AwareApplication ?: return
+        if (app.container.secureStore.getBoolean("app_lock") && !isChangingConfigurations) {
+            unlocked = false
+        }
+    }
+
+    private fun requestUnlock() {
+        if (authenticationShowing || unlocked || isFinishing) return
         val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
         if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) return
+        authenticationShowing = true
         BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { unlocked = true }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { if (!isFinishing) finish() }
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                authenticationShowing = false
+                unlocked = true
+            }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                authenticationShowing = false
+            }
+            override fun onAuthenticationFailed() {
+                // The system prompt stays open after a rejected biometric.
+                // Keep the guard set so a second prompt cannot be launched on top.
+            }
         }).authenticate(
             BiometricPrompt.PromptInfo.Builder()
                 .setTitle("Unlock aware")
@@ -179,4 +251,33 @@ class MainActivity : FragmentActivity() {
         )
     }
 
+}
+
+@Composable
+private fun PrivateLockScreen(onUnlock: () -> Unit) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(10.dp),
+                )
+                Spacer(Modifier.height(18.dp))
+                Text("aware is locked", style = MaterialTheme.typography.headlineMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Your financial data stays hidden until you unlock.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 15.sp,
+                )
+                Spacer(Modifier.height(24.dp))
+                Button(onClick = onUnlock) { Text("Unlock") }
+            }
+        }
+    }
 }

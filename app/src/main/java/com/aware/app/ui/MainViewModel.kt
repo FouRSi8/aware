@@ -120,6 +120,10 @@ class MainViewModel(private val repository: AwareRepository, private val categor
 
     fun deleteTransaction(id: Long) = viewModelScope.launch { repository.deleteTransaction(id) }
 
+    fun updateTransactionDate(id: Long, occurredAt: Long) = viewModelScope.launch {
+        repository.updateTransactionDate(id, occurredAt)
+    }
+
     fun addBudget(
         name: String,
         capPaise: Long,
@@ -149,6 +153,21 @@ class MainViewModel(private val repository: AwareRepository, private val categor
 
     fun addAccount(name: String, kind: AccountKind, openingBalancePaise: Long) = viewModelScope.launch {
         repository.addAccount(AccountEntity(name = name, kind = kind, openingBalancePaise = openingBalancePaise))
+    }
+
+    fun saveAccount(id: Long, name: String, kind: AccountKind, openingBalancePaise: Long, isDefault: Boolean) = viewModelScope.launch {
+        val existing = state.value.accounts.firstOrNull { it.id == id }
+        repository.saveAccount(
+            AccountEntity(
+                id = id,
+                name = name.trim(),
+                kind = kind,
+                openingBalancePaise = openingBalancePaise,
+                currency = existing?.currency ?: "INR",
+                isDefault = isDefault,
+                createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            ),
+        )
     }
 
     fun addCategory(name: String, emoji: String, colorArgb: Long, isIncome: Boolean) = viewModelScope.launch {

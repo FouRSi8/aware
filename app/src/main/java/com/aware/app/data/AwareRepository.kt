@@ -148,6 +148,22 @@ class AwareRepository(
         database.transactionDao().byId(id)?.let { database.transactionDao().delete(it) }
     }
     suspend fun addAccount(item: AccountEntity) = database.accountDao().insert(item)
+    suspend fun saveAccount(item: AccountEntity): Long = database.withTransaction {
+        if (item.isDefault) database.accountDao().clearDefault()
+        val id = if (item.id == 0L) {
+            database.accountDao().insert(item)
+        } else {
+            database.accountDao().update(item)
+            item.id
+        }
+        if (database.accountDao().defaultAccount() == null) {
+            database.accountDao().byId(id)?.let { database.accountDao().update(it.copy(isDefault = true)) }
+        }
+        id
+    }
+    suspend fun updateTransactionDate(id: Long, occurredAt: Long) {
+        database.transactionDao().byId(id)?.let { database.transactionDao().update(it.copy(occurredAt = occurredAt)) }
+    }
     suspend fun addCategory(item: CategoryEntity) = database.categoryDao().insert(item)
     suspend fun addBudget(item: BudgetBucketEntity) = database.budgetDao().upsert(item)
     suspend fun addRecurring(item: RecurringRuleEntity) = database.recurringDao().insert(item)
