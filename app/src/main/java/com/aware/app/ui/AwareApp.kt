@@ -93,6 +93,8 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -321,7 +323,6 @@ fun AwareApp(
                     onOpenActivity = { selected = Tab.ACTIVITY },
                     onOpenPlan = { selected = Tab.PLAN },
                     onOpenInsights = { selected = Tab.INSIGHTS },
-                    onOpenSettings = { selected = Tab.SETTINGS },
                     onOpenTransaction = { selectedTransaction = it },
                     modifier = Modifier.padding(padding),
                 )
@@ -716,7 +717,6 @@ private fun HomeScreen(
     onOpenActivity: () -> Unit,
     onOpenPlan: () -> Unit,
     onOpenInsights: () -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenTransaction: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -735,7 +735,8 @@ private fun HomeScreen(
                 period = period,
                 onPeriod = { period = it },
                 onSearch = onOpenActivity,
-                onSettings = onOpenSettings,
+                pendingCount = state.pending.size,
+                onReviewPending = { state.pending.firstOrNull()?.let { onReview(it.id) } },
             )
         }
         if (!smsGranted && !paymentNotificationAccessGranted) {
@@ -792,7 +793,8 @@ private fun AwareTopBar(
     period: SummaryPeriod,
     onPeriod: (SummaryPeriod) -> Unit,
     onSearch: () -> Unit,
-    onSettings: () -> Unit,
+    pendingCount: Int,
+    onReviewPending: () -> Unit,
 ) {
     val t = LocalTokens.current
     val searchInk = readableAccent(t.onAccent, t.lilac)
@@ -824,14 +826,34 @@ private fun AwareTopBar(
                 )
             }
             Spacer(Modifier.weight(1f))
-            Surface(
-                shape = iconShape,
-                color = if (t.maximal) Color.Transparent else MaterialTheme.colorScheme.surface,
-                border = if (t.maximal) BorderStroke(t.outlineWidth, t.frame) else null,
-            ) {
-                IconButton(onClick = onSettings, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Default.Tune, "Open settings", tint = MaterialTheme.colorScheme.onSurface)
+            if (pendingCount > 0) {
+                Surface(
+                    shape = iconShape,
+                    color = if (t.maximal) Color.Transparent else t.warn.copy(alpha = .2f),
+                    border = if (t.maximal) BorderStroke(t.outlineWidth, t.warn) else null,
+                ) {
+                    IconButton(onClick = onReviewPending, modifier = Modifier.size(40.dp)) {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = t.warn,
+                                    contentColor = readableAccent(t.onAccent, t.warn),
+                                ) {
+                                    Text(if (pendingCount > 99) "99+" else pendingCount.toString())
+                                }
+                            },
+                        ) {
+                            Icon(
+                                Icons.Default.Inbox,
+                                "Review $pendingCount pending payment${if (pendingCount == 1) "" else "s"}",
+                                tint = if (t.maximal) t.warn else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
                 }
+            } else {
+                // Preserve the centered wordmark without showing an inactive duplicate action.
+                Spacer(Modifier.size(40.dp))
             }
         }
         PeriodSelector(period, onPeriod, Modifier.padding(top = 9.dp))
