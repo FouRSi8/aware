@@ -87,21 +87,26 @@ class AwareRepository(
         id: Long,
         amountPaise: Long? = null,
         merchant: String? = null,
+        type: TransactionType? = null,
         categoryId: Long? = null,
         accountId: Long? = null,
+        destinationAccountId: Long? = null,
         learnRule: Boolean = false,
     ): Long = database.withTransaction {
         val candidate = database.captureDao().byId(id) ?: return@withTransaction -1L
         if (candidate.status != TransactionStatus.PENDING_REVIEW) return@withTransaction -1L
         val source = database.accountDao().defaultAccount() ?: return@withTransaction -1L
-        val cash = if (candidate.type == TransactionType.TRANSFER) database.accountDao().cashAccount() else null
+        val finalType = type ?: candidate.type
+        val cash = if (finalType == TransactionType.TRANSFER) database.accountDao().cashAccount() else null
         val merchantRule = database.merchantRuleDao().find(candidate.merchant.lowercase())
         val finalMerchant = merchant?.trim()?.takeIf(String::isNotEmpty) ?: merchantRule?.displayMerchant ?: candidate.merchant
-        val finalCategory = categoryId ?: merchantRule?.categoryId
+        val finalCategory = if (finalType == TransactionType.TRANSFER) null else categoryId ?: merchantRule?.categoryId?.takeIf { finalType == candidate.type }
         val finalAccount = accountId ?: merchantRule?.accountId ?: source.id
+        val finalDestination = destinationAccountId ?: cash?.id
+        if (finalType == TransactionType.TRANSFER && (finalDestination == null || finalDestination == finalAccount)) return@withTransaction -1L
         val finalAmount = amountPaise ?: candidate.amountPaise
         val nearExpected = database.transactionDao().expectedNear(
-            candidate.type,
+            finalType,
             candidate.receivedAt - 3 * 24 * 3600_000L,
             candidate.receivedAt + 3 * 24 * 3600_000L,
         ).minByOrNull { kotlin.math.abs(it.amountPaise - finalAmount) }?.takeIf {
@@ -109,10 +114,10 @@ class AwareRepository(
         }
         val newTransaction = TransactionEntity(
                 amountPaise = finalAmount,
-                type = candidate.type,
+                type = finalType,
                 source = candidate.source,
                 accountId = finalAccount,
-                destinationAccountId = cash?.id,
+                destinationAccountId = finalDestination.takeIf { finalType == TransactionType.TRANSFER },
                 categoryId = finalCategory,
                 merchant = finalMerchant,
                 occurredAt = candidate.receivedAt,

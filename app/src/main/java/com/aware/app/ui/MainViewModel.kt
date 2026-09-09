@@ -79,11 +79,13 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         id: Long,
         amountPaise: Long,
         merchant: String,
+        type: TransactionType,
         categoryId: Long?,
         accountId: Long?,
+        destinationAccountId: Long?,
         learnRule: Boolean,
     ) = viewModelScope.launch {
-        repository.postCandidate(id, amountPaise, merchant, categoryId, accountId, learnRule)
+        repository.postCandidate(id, amountPaise, merchant, type, categoryId, accountId, destinationAccountId, learnRule)
         selectedReview.value = null
     }
 

@@ -564,9 +564,9 @@ fun AwareApp(
             state = state,
             onDismiss = viewModel::closeReview,
             onDiscard = { viewModel.dismissCandidate(candidate.id) },
-            onConfirm = { amount, merchant, category, account, learn ->
-                viewModel.confirmCandidate(candidate.id, amount, merchant, category, account, learn)
-                confirmation = TransactionConfirmation(amount, merchant, candidate.type)
+            onConfirm = { amount, merchant, type, category, account, destination, learn ->
+                viewModel.confirmCandidate(candidate.id, amount, merchant, type, category, account, destination, learn)
+                confirmation = TransactionConfirmation(amount, merchant, type)
             },
             groqConfigured = groqConfigured,
             aiSuggestion = aiSuggestion,
@@ -3039,7 +3039,7 @@ private fun CandidateReviewDialog(
     state: MainUiState,
     onDismiss: () -> Unit,
     onDiscard: () -> Unit,
-    onConfirm: (Long, String, Long?, Long?, Boolean) -> Unit,
+    onConfirm: (Long, String, TransactionType, Long?, Long?, Long?, Boolean) -> Unit,
     groqConfigured: Boolean,
     aiSuggestion: String?,
     onSuggest: () -> Unit,
@@ -3048,33 +3048,65 @@ private fun CandidateReviewDialog(
 ) {
     var amount by remember(candidate.id) { mutableStateOf("%.2f".format(Locale.ENGLISH, candidate.amountPaise / 100.0)) }
     var merchant by remember(candidate.id) { mutableStateOf(candidate.merchant) }
+    var type by remember(candidate.id) { mutableStateOf(candidate.type) }
     var categoryId by remember { mutableStateOf<Long?>(null) }
     var accountId by remember(state.accounts) { mutableLongStateOf(state.accounts.firstOrNull { it.isDefault }?.id ?: 0L) }
+    var destinationAccountId by remember(candidate.id, state.accounts) {
+        mutableStateOf(state.accounts.firstOrNull { candidate.type == TransactionType.TRANSFER && it.kind == AccountKind.CASH }?.id)
+    }
     var learn by remember { mutableStateOf(true) }
     val paise = parsePaise(amount)
     val confident = candidate.confidence >= .82f
     val badge = if (confident) LocalTokens.current.positive else LocalTokens.current.accent
     val badgeInk = readableAccent(LocalTokens.current.onAccent, badge)
+    val canConfirm = paise != null && paise > 0 && merchant.isNotBlank() && accountId > 0 &&
+        (type != TransactionType.TRANSFER || destinationAccountId != null)
+    fun changeType(next: TransactionType) {
+        if (next != type) {
+            type = next
+            categoryId = null
+            destinationAccountId = null
+        }
+    }
     AwareDialog("Authorize payment", onDismiss) {
         Surface(shape = awareShape(16.dp), color = badge) {
             Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(candidate.type.name, color = badgeInk, fontWeight = FontWeight.Black)
+                Text("DETECTED ${candidate.type.name}", color = badgeInk, fontWeight = FontWeight.Black)
                 Text("${(candidate.confidence * 100).toInt()}% CONFIDENCE", color = badgeInk, fontWeight = FontWeight.Black)
             }
         }
         Text("Captured from ${candidate.sender}. This payment will not appear in your ledger until you approve it here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Label("Transaction type")
+        ChoiceRow(
+            listOf(TransactionType.EXPENSE, TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.REFUND),
+            selected = type,
+            label = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+            onSelected = ::changeType,
+        )
         MoneyField(amount) { amount = it }
         OutlinedTextField(merchant, { merchant = it }, Modifier.fillMaxWidth(), label = { Text("Merchant") }, colors = cozyFieldColors(), singleLine = true)
         Label("Account")
-        ScrollChoices(state.accounts, accountId, { it.id }, { it.name }, onAdd = onAddAccount) { accountId = it.id }
-        if (candidate.type != TransactionType.TRANSFER) {
+        ScrollChoices(state.accounts, accountId, { it.id }, { it.name }, onAdd = onAddAccount) {
+            accountId = it.id
+            if (destinationAccountId == it.id) destinationAccountId = null
+        }
+        if (type == TransactionType.TRANSFER) {
+            Label("To account / cash wallet")
+            ScrollChoices(
+                state.accounts.filter { it.id != accountId },
+                destinationAccountId,
+                { it.id },
+                { it.name },
+                onAdd = onAddAccount,
+            ) { destinationAccountId = it.id }
+        } else {
             Label("Category")
             AwareCategoryPicker(
-                state.categories.filter { it.isIncome == (candidate.type == TransactionType.INCOME || candidate.type == TransactionType.REFUND) },
+                state.categories.filter { it.isIncome == (type == TransactionType.INCOME || type == TransactionType.REFUND) },
                 categoryId,
-                onAdd = { onAddCategory(candidate.type == TransactionType.INCOME || candidate.type == TransactionType.REFUND) },
+                onAdd = { onAddCategory(type == TransactionType.INCOME || type == TransactionType.REFUND) },
             ) { categoryId = it }
-            if (groqConfigured && candidate.type == TransactionType.EXPENSE) {
+            if (groqConfigured && type == TransactionType.EXPENSE) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = onSuggest) { Text("ASK PRIVATE AI") }
                     aiSuggestion?.let { suggestion ->
@@ -3087,7 +3119,7 @@ private fun CandidateReviewDialog(
                 Checkbox(learn, { learn = it }); Text("Remember this merchant next time", fontWeight = FontWeight.Bold)
             }
         }
-        Button(onClick = { onConfirm(paise ?: 0, merchant, categoryId, accountId, learn) }, enabled = paise != null && paise > 0 && merchant.isNotBlank() && accountId > 0, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Authorize and add") }
+        Button(onClick = { onConfirm(paise ?: 0, merchant, type, categoryId, accountId, destinationAccountId, learn) }, enabled = canConfirm, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Authorize and add") }
         TextButton(onClick = onDiscard, modifier = Modifier.fillMaxWidth()) { Text("Not a transaction — discard", color = MaterialTheme.colorScheme.error) }
     }
 }
