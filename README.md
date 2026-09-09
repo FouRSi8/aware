@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.2.5" src="https://img.shields.io/badge/latest-v1.2.5-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.2.6" src="https://img.shields.io/badge/latest-v1.2.6-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -52,8 +52,9 @@ an analytics company or requiring an account.
 ### Two complete visual identities
 
 - **Cozy** — warm paper, espresso ink, garden pastels, quiet geometry, and
-  Manrope typography. Choose Oat garden, Sage & rose, or Plum hearth; every
-  palette has a coordinated light and dark appearance.
+  Manrope typography. Choose Oat garden, Sage & rose, Plum hearth, Linen café,
+  Navy tide, or Charcoal & leather; every palette has coordinated light, dark,
+  OLED, widget, and launcher-icon treatments.
 - **f@#k cozy** — near-black instrumentation, hard frames, neon signals,
   console typography, and deliberately loud composition.
 
@@ -74,10 +75,10 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest version available: v1.2.5.** The newest source is always on
-> [`main`](https://github.com/FouRSi8/aware/tree/main). This version adds
-> review-only Google Pay and super.money notification capture, transaction
-> details/edit/delete, save confirmation animation, and weekly widget reports.
+> **Latest version available: v1.2.6.** The newest source is always on
+> [`main`](https://github.com/FouRSi8/aware/tree/main). This version expands
+> Cozy with Linen café, Navy tide, and Charcoal & leather palettes, each with
+> light, dark, OLED, widget, and launcher-icon treatments.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps and SMS permission;

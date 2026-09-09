@@ -546,6 +546,21 @@ private fun cozyPaletteSwatch(palette: CozyPalette, dark: Boolean): List<Color> 
     } else {
         listOf(Color(0xFFFFF7F4), Color(0xFFD4A7B5), Color(0xFFE7C48F), Color(0xFFAFC1A5), Color(0xFFB9CBD2))
     }
+    CozyPalette.LINEN_CAFE -> if (dark) {
+        listOf(Color(0xFF261B16), Color(0xFF4A342A), Color(0xFF7D5A44), Color(0xFFB2967D), Color(0xFFD7C9B8))
+    } else {
+        listOf(Color(0xFFF5F1EA), Color(0xFFD7C9B8), Color(0xFFB2967D), Color(0xFF7D5A44), Color(0xFF4A342A))
+    }
+    CozyPalette.NAVY_TIDE -> if (dark) {
+        listOf(Color(0xFF172432), Color(0xFF2F4156), Color(0xFF567C8D), Color(0xFFC8D9E6), Color(0xFFF5EFEB))
+    } else {
+        listOf(Color(0xFFF5EFEB), Color(0xFFFFFFFF), Color(0xFFC8D9E6), Color(0xFF567C8D), Color(0xFF2F4156))
+    }
+    CozyPalette.CHARCOAL_LEATHER -> if (dark) {
+        listOf(Color(0xFF242323), Color(0xFF363636), Color(0xFF525254), Color(0xFF795238), Color(0xFFAEA7A3))
+    } else {
+        listOf(Color(0xFFF5F2F0), Color(0xFFAEA7A3), Color(0xFF959595), Color(0xFF795238), Color(0xFF363636))
+    }
 }
 
 @Composable

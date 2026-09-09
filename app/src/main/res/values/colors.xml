@@ -2,5 +2,8 @@
     <color name="launcher_bg_cosy">#D9E8B5</color>
     <color name="launcher_bg_sage_rose">#D8A4AA</color>
     <color name="launcher_bg_plum_hearth">#F0C38E</color>
+    <color name="launcher_bg_linen_cafe">#B2967D</color>
+    <color name="launcher_bg_navy_tide">#C8D9E6</color>
+    <color name="launcher_bg_charcoal_leather">#795238</color>
     <color name="launcher_bg_maximal">#C6FF3D</color>
 </resources>

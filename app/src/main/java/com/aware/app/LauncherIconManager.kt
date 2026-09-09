@@ -11,8 +11,11 @@ object LauncherIconManager {
     private const val OAT = ".launcher.OatLauncher"
     private const val SAGE = ".launcher.SageRoseLauncher"
     private const val PLUM = ".launcher.PlumHearthLauncher"
+    private const val LINEN = ".launcher.LinenCafeLauncher"
+    private const val NAVY = ".launcher.NavyTideLauncher"
+    private const val CHARCOAL = ".launcher.CharcoalLeatherLauncher"
     private const val MAXIMAL = ".launcher.MaximalLauncher"
-    private val aliases = listOf(OAT, SAGE, PLUM, MAXIMAL)
+    private val aliases = listOf(OAT, SAGE, PLUM, LINEN, NAVY, CHARCOAL, MAXIMAL)
 
     fun sync(
         context: Context,
@@ -24,6 +27,9 @@ object LauncherIconManager {
             skin == Skin.MAXIMAL -> MAXIMAL
             cozyPalette == CozyPalette.SAGE_ROSE -> SAGE
             cozyPalette == CozyPalette.PLUM_HEARTH -> PLUM
+            cozyPalette == CozyPalette.LINEN_CAFE -> LINEN
+            cozyPalette == CozyPalette.NAVY_TIDE -> NAVY
+            cozyPalette == CozyPalette.CHARCOAL_LEATHER -> CHARCOAL
             else -> OAT
         }
         val packageManager = context.packageManager

@@ -79,26 +79,41 @@ private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, report
         CozyPalette.OAT_GARDEN -> themed(Color(0xFFFFF9F0), Color(0xFF1B1816))
         CozyPalette.SAGE_ROSE -> themed(Color(0xFFFBF8F1), Color(0xFF141914))
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFFFFF7F4), Color(0xFF130E11))
+        CozyPalette.LINEN_CAFE -> themed(Color(0xFFF5F1EA), Color(0xFF261B16))
+        CozyPalette.NAVY_TIDE -> themed(Color(0xFFF5EFEB), Color(0xFF172432))
+        CozyPalette.CHARCOAL_LEATHER -> themed(Color(0xFFF5F2F0), Color(0xFF242323))
     }
     val foreground = if (maximal) themed(Color(0xFF08080A), Color(0xFFF7F7FA)) else when (cozyPalette) {
         CozyPalette.OAT_GARDEN -> themed(Color(0xFF312B27), Color(0xFFF6EEE4))
         CozyPalette.SAGE_ROSE -> themed(Color(0xFF30342E), Color(0xFFF2EFE8))
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFF382A31), Color(0xFFF7ECEE))
+        CozyPalette.LINEN_CAFE -> themed(Color(0xFF4A342A), Color(0xFFF5F1EA))
+        CozyPalette.NAVY_TIDE -> themed(Color(0xFF2F4156), Color(0xFFE8F0F4))
+        CozyPalette.CHARCOAL_LEATHER -> themed(Color(0xFF242323), Color(0xFFF1EEEC))
     }
     val secondary = if (maximal) themed(Color(0xFF54545E), Color(0xFF9A9AA6)) else when (cozyPalette) {
         CozyPalette.OAT_GARDEN -> themed(Color(0xFF6E625A), Color(0xFFCABDB1))
         CozyPalette.SAGE_ROSE -> themed(Color(0xFF665F57), Color(0xFFCEC4B8))
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFF6F5C63), Color(0xFFD5C0C6))
+        CozyPalette.LINEN_CAFE -> themed(Color(0xFF685247), Color(0xFFD7C9B8))
+        CozyPalette.NAVY_TIDE -> themed(Color(0xFF526473), Color(0xFFC0CFD8))
+        CozyPalette.CHARCOAL_LEATHER -> themed(Color(0xFF525254), Color(0xFFC9C4C1))
     }
     val accent = if (maximal) themed(Color(0xFF9BE000), Color(0xFFC6FF3D)) else when (cozyPalette) {
         CozyPalette.OAT_GARDEN -> themed(Color(0xFFD9E8B5), Color(0xFFC9DDAA))
         CozyPalette.SAGE_ROSE -> themed(Color(0xFFD5B2AC), Color(0xFFD4AAA5))
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFFE7C48F), Color(0xFFD9B982))
+        CozyPalette.LINEN_CAFE -> themed(Color(0xFFB2967D), Color(0xFFD7C9B8))
+        CozyPalette.NAVY_TIDE -> themed(Color(0xFF567C8D), Color(0xFFC8D9E6))
+        CozyPalette.CHARCOAL_LEATHER -> themed(Color(0xFF795238), Color(0xFFB47B56))
     }
     val onAccent = if (maximal) themed(Color(0xFF08080A), Color(0xFF08080A)) else when (cozyPalette) {
         CozyPalette.OAT_GARDEN -> themed(Color(0xFF312B27), Color(0xFF312B27))
         CozyPalette.SAGE_ROSE -> themed(Color(0xFF332927), Color(0xFF2A201F))
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFF382A23), Color(0xFF2A1D18))
+        CozyPalette.LINEN_CAFE -> themed(Color(0xFF34231C), Color(0xFF34231C))
+        CozyPalette.NAVY_TIDE -> themed(Color(0xFFFFFFFF), Color(0xFF203041))
+        CozyPalette.CHARCOAL_LEATHER -> themed(Color(0xFFFFFFFF), Color(0xFF211713))
     }
     Column(
         modifier = GlanceModifier.fillMaxSize().background(background).padding(if (maximal) 14.dp else 18.dp),
