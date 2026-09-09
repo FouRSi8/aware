@@ -101,6 +101,20 @@ enum class Appearance(val key: String, val label: String) {
     }
 }
 
+/** Colour family used by the Cozy identity. Every family has light and dark art direction. */
+enum class CozyPalette(val key: String, val label: String, val blurb: String) {
+    OAT_GARDEN("oat_garden", "Oat garden", "Cream paper, powder blue, pistachio and apricot."),
+    SAGE_ROSE("sage_rose", "Sage & rose", "Botanical sage, dusty rose and soft stone."),
+    PLUM_HEARTH("plum_hearth", "Plum hearth", "Warm parchment by day, brown-plum velvet by night.");
+
+    companion object {
+        fun fromKey(key: String?): CozyPalette =
+            entries.firstOrNull { it.key == key }
+                ?: entries.firstOrNull { it.name == key }
+                ?: OAT_GARDEN
+    }
+}
+
 /**
  * Semantic colour and shape tokens. Feature code reads these instead of raw
  * palette constants so both skins - and both brightnesses - stay correct.
@@ -163,6 +177,62 @@ private val CozyDarkTokens = AwareTokens(
     chart = listOf(CozyDarkSage, CozyDarkApricot, CozyDarkLavender, CozyDarkRose, CozyDarkPowderBlue, CozyDarkPistachio),
     cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
     frame = Color(0xFF514840), panel = CozyDarkSurface, maximal = false,
+)
+
+private val SageRoseLightTokens = AwareTokens(
+    accent = Color(0xFFD5B2AC), onAccent = Color(0xFF332927),
+    hero = Color(0xFFBEC8B1), onHero = Color(0xFF283026),
+    affirm = Color(0xFF394137), onAffirm = Color(0xFFFBF8F1),
+    navBar = Color(0xFF394137), navIdle = Color(0xFFFBF8F1).copy(alpha = .76f),
+    navPill = Color(0xFFFBF8F1), onNavPill = Color(0xFF394137),
+    positive = Color(0xFF58755D), negative = Color(0xFF9B5557),
+    warn = Color(0xFFE0B988), info = Color(0xFFBED0D0), violet = Color(0xFFC7BDD6),
+    pink = Color(0xFFD5B2AC), lilac = Color(0xFFE3D9E6),
+    chart = listOf(Color(0xFFAEB8A0), Color(0xFFD5B2AC), Color(0xFFE0B988), Color(0xFFBED0D0), Color(0xFFC7BDD6), Color(0xFF8FA58B)),
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    frame = Color(0xFFCFC7BC), panel = Color(0xFFF1EBE1), maximal = false,
+)
+
+private val SageRoseDarkTokens = AwareTokens(
+    accent = Color(0xFFD4AAA5), onAccent = Color(0xFF2A201F),
+    hero = Color(0xFFAEB8A0), onHero = Color(0xFF1D241C),
+    affirm = Color(0xFFF2EFE8), onAffirm = Color(0xFF202720),
+    navBar = Color(0xFF1A201A), navIdle = Color(0xFFF2EFE8).copy(alpha = .72f),
+    navPill = Color(0xFFF2EFE8), onNavPill = Color(0xFF202720),
+    positive = Color(0xFFA9C2A5), negative = Color(0xFFE0A09E),
+    warn = Color(0xFFE1BA88), info = Color(0xFFB8CECB), violet = Color(0xFFC9BDDA),
+    pink = Color(0xFFD4AAA5), lilac = Color(0xFFDACFE0),
+    chart = listOf(Color(0xFFAEB8A0), Color(0xFFD4AAA5), Color(0xFFE1BA88), Color(0xFFB8CECB), Color(0xFFC9BDDA), Color(0xFF8FA58B)),
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    frame = Color(0xFF5B6758), panel = Color(0xFF202720), maximal = false,
+)
+
+private val PlumHearthLightTokens = AwareTokens(
+    accent = Color(0xFFE7C48F), onAccent = Color(0xFF382A23),
+    hero = Color(0xFFD4A7B5), onHero = Color(0xFF351E28),
+    affirm = Color(0xFF351E28), onAffirm = Color(0xFFFFF7F4),
+    navBar = Color(0xFF351E28), navIdle = Color(0xFFFFF7F4).copy(alpha = .76f),
+    navPill = Color(0xFFFFF7F4), onNavPill = Color(0xFF351E28),
+    positive = Color(0xFF647D63), negative = Color(0xFFA84F61),
+    warn = Color(0xFFE7C48F), info = Color(0xFFB9CBD2), violet = Color(0xFFB9A8C8),
+    pink = Color(0xFFD4A7B5), lilac = Color(0xFFE5D5E2),
+    chart = listOf(Color(0xFF9E7183), Color(0xFFE7C48F), Color(0xFFAFC1A5), Color(0xFFB9CBD2), Color(0xFFB9A8C8), Color(0xFFD28C82)),
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    frame = Color(0xFFD7C5C5), panel = Color(0xFFF5E9E8), maximal = false,
+)
+
+private val PlumHearthDarkTokens = AwareTokens(
+    accent = Color(0xFFD9B982), onAccent = Color(0xFF2A1D18),
+    hero = Color(0xFFA76E84), onHero = Color(0xFFFFF7F4),
+    affirm = Color(0xFFF7ECEE), onAffirm = Color(0xFF351E28),
+    navBar = Color(0xFF1B1217), navIdle = Color(0xFFF7ECEE).copy(alpha = .72f),
+    navPill = Color(0xFFE8CAD3), onNavPill = Color(0xFF351E28),
+    positive = Color(0xFFAFC5A7), negative = Color(0xFFE09A9A),
+    warn = Color(0xFFD9B982), info = Color(0xFFA9C3CB), violet = Color(0xFFC4AED2),
+    pink = Color(0xFFD5A4B5), lilac = Color(0xFFD8C1D2),
+    chart = listOf(Color(0xFFD5A4B5), Color(0xFFD9B982), Color(0xFFAFC5A7), Color(0xFFA9C3CB), Color(0xFFC4AED2), Color(0xFFD58A7D)),
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    frame = Color(0xFF684555), panel = Color(0xFF21161C), maximal = false,
 )
 
 private val MaximalDarkTokens = AwareTokens(
@@ -229,6 +299,66 @@ private val CozyDark = darkColorScheme(
     surfaceContainerHighest = CozyDarkRaised,
 )
 
+private val SageRoseLight = lightColorScheme(
+    primary = Color(0xFF394137), onPrimary = Color(0xFFFBF8F1),
+    secondary = Color(0xFFA17F7A), onSecondary = Color(0xFFFFFFFF),
+    tertiary = Color(0xFFAEB8A0), onTertiary = Color(0xFF263024),
+    background = Color(0xFFFBF8F1), onBackground = Color(0xFF30342E),
+    surface = Color(0xFFF1EBE1), onSurface = Color(0xFF30342E),
+    surfaceVariant = Color(0xFFE8E0D5), onSurfaceVariant = Color(0xFF665F57),
+    outline = Color(0xFFCFC7BC), outlineVariant = Color(0xFFE1D9CE),
+    error = Color(0xFF9B5557), onError = Color(0xFFFFFFFF),
+    surfaceDim = Color(0xFFE5DED3), surfaceBright = Color(0xFFFFFCF6),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF7F2E9),
+    surfaceContainer = Color(0xFFF1EBE1), surfaceContainerHigh = Color(0xFFECE5DB),
+    surfaceContainerHighest = Color(0xFFE5DED3),
+)
+
+private val SageRoseDark = darkColorScheme(
+    primary = Color(0xFFC0CBB5), onPrimary = Color(0xFF1D241C),
+    secondary = Color(0xFFD4AAA5), onSecondary = Color(0xFF30201F),
+    tertiary = Color(0xFFB8CECB), onTertiary = Color(0xFF18302E),
+    background = Color(0xFF141914), onBackground = Color(0xFFF2EFE8),
+    surface = Color(0xFF202720), onSurface = Color(0xFFF2EFE8),
+    surfaceVariant = Color(0xFF2C342B), onSurfaceVariant = Color(0xFFCEC4B8),
+    outline = Color(0xFF788475), outlineVariant = Color(0xFF465044),
+    error = Color(0xFFE0A09E), onError = Color(0xFF4A181B),
+    surfaceDim = Color(0xFF101410), surfaceBright = Color(0xFF374036),
+    surfaceContainerLowest = Color(0xFF0F130F), surfaceContainerLow = Color(0xFF1A201A),
+    surfaceContainer = Color(0xFF202720), surfaceContainerHigh = Color(0xFF273026),
+    surfaceContainerHighest = Color(0xFF2C342B),
+)
+
+private val PlumHearthLight = lightColorScheme(
+    primary = Color(0xFF432936), onPrimary = Color(0xFFFFF7F4),
+    secondary = Color(0xFFA76E84), onSecondary = Color(0xFFFFFFFF),
+    tertiary = Color(0xFFE7C48F), onTertiary = Color(0xFF382A23),
+    background = Color(0xFFFFF7F4), onBackground = Color(0xFF382A31),
+    surface = Color(0xFFF5E9E8), onSurface = Color(0xFF382A31),
+    surfaceVariant = Color(0xFFEBDDDC), onSurfaceVariant = Color(0xFF6F5C63),
+    outline = Color(0xFFD7C5C5), outlineVariant = Color(0xFFE8DADA),
+    error = Color(0xFFA84F61), onError = Color(0xFFFFFFFF),
+    surfaceDim = Color(0xFFE8DADB), surfaceBright = Color(0xFFFFFBF8),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFBF1EF),
+    surfaceContainer = Color(0xFFF5E9E8), surfaceContainerHigh = Color(0xFFEFE2E1),
+    surfaceContainerHighest = Color(0xFFE8DADB),
+)
+
+private val PlumHearthDark = darkColorScheme(
+    primary = Color(0xFFE4B8C6), onPrimary = Color(0xFF351E28),
+    secondary = Color(0xFFD9B982), onSecondary = Color(0xFF2A1D18),
+    tertiary = Color(0xFFAFC5A7), onTertiary = Color(0xFF20301E),
+    background = Color(0xFF130E11), onBackground = Color(0xFFF7ECEE),
+    surface = Color(0xFF21161C), onSurface = Color(0xFFF7ECEE),
+    surfaceVariant = Color(0xFF351E28), onSurfaceVariant = Color(0xFFD5C0C6),
+    outline = Color(0xFF806071), outlineVariant = Color(0xFF523744),
+    error = Color(0xFFE09A9A), onError = Color(0xFF49171D),
+    surfaceDim = Color(0xFF0F0A0D), surfaceBright = Color(0xFF432C37),
+    surfaceContainerLowest = Color(0xFF0D090B), surfaceContainerLow = Color(0xFF1B1217),
+    surfaceContainer = Color(0xFF21161C), surfaceContainerHigh = Color(0xFF2B1B23),
+    surfaceContainerHighest = Color(0xFF351E28),
+)
+
 private val MaximalDark = darkColorScheme(
     primary = NeonLime, onPrimary = Void,
     secondary = NeonMagenta, onSecondary = Void,
@@ -291,18 +421,27 @@ fun readableAccent(accent: Color, background: Color = MaterialTheme.colorScheme.
 @Composable
 fun AwareTheme(
     skin: Skin = Skin.COZY,
+    cozyPalette: CozyPalette = CozyPalette.OAT_GARDEN,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     val scheme = when {
         skin == Skin.MAXIMAL && darkTheme -> MaximalDark
         skin == Skin.MAXIMAL -> MaximalLight
+        cozyPalette == CozyPalette.SAGE_ROSE && darkTheme -> SageRoseDark
+        cozyPalette == CozyPalette.SAGE_ROSE -> SageRoseLight
+        cozyPalette == CozyPalette.PLUM_HEARTH && darkTheme -> PlumHearthDark
+        cozyPalette == CozyPalette.PLUM_HEARTH -> PlumHearthLight
         darkTheme -> CozyDark
         else -> CozyLight
     }
     val tokens = when {
         skin == Skin.MAXIMAL && darkTheme -> MaximalDarkTokens
         skin == Skin.MAXIMAL -> MaximalLightTokens
+        cozyPalette == CozyPalette.SAGE_ROSE && darkTheme -> SageRoseDarkTokens
+        cozyPalette == CozyPalette.SAGE_ROSE -> SageRoseLightTokens
+        cozyPalette == CozyPalette.PLUM_HEARTH && darkTheme -> PlumHearthDarkTokens
+        cozyPalette == CozyPalette.PLUM_HEARTH -> PlumHearthLightTokens
         darkTheme -> CozyDarkTokens
         else -> CozyLightTokens
     }

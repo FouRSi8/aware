@@ -44,6 +44,7 @@ import com.aware.app.ui.AwareApp
 import com.aware.app.ui.MainViewModel
 import com.aware.app.ui.theme.AwareTheme
 import com.aware.app.ui.theme.Appearance
+import com.aware.app.ui.theme.CozyPalette
 import com.aware.app.ui.theme.Skin
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.biometric.BiometricManager
@@ -105,6 +106,9 @@ class MainActivity : FragmentActivity() {
                     ),
                 )
             }
+            var cozyPalette by remember {
+                mutableStateOf(CozyPalette.fromKey(appearancePrefs.getString("cozy_palette_key", null)))
+            }
             val dark = when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
                 Appearance.LIGHT -> false
@@ -115,7 +119,7 @@ class MainActivity : FragmentActivity() {
                 Density(baseDensity.density * 1.08f, baseDensity.fontScale)
             }
             CompositionLocalProvider(LocalDensity provides comfortableDensity) {
-                AwareTheme(skin = skin, darkTheme = dark) {
+                AwareTheme(skin = skin, cozyPalette = cozyPalette, darkTheme = dark) {
                     if (unlocked) AwareApp(
                     appearance = appearance,
                     onAppearanceChange = {
@@ -135,6 +139,13 @@ class MainActivity : FragmentActivity() {
                             editor.putString("mode_key", Appearance.DARK.key)
                         }
                         editor.apply()
+                        scope.launch { com.aware.app.widget.AwareWidget().updateAll(this@MainActivity) }
+                    },
+                    cozyPalette = cozyPalette,
+                    onCozyPaletteChange = { next ->
+                        cozyPalette = next
+                        appearancePrefs.edit().putString("cozy_palette_key", next.key).apply()
+                        scope.launch { com.aware.app.widget.AwareWidget().updateAll(this@MainActivity) }
                     },
                     viewModel = viewModel,
                     widgetTransactionId = incomingWidgetTransactionId,

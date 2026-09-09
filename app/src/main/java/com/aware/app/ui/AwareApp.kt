@@ -172,6 +172,7 @@ import com.aware.app.data.RecurringRuleEntity
 import com.aware.app.data.TransactionEntity
 import com.aware.app.data.TransactionType
 import com.aware.app.ui.theme.Appearance
+import com.aware.app.ui.theme.CozyPalette
 import com.aware.app.ui.theme.LocalTokens
 import androidx.compose.material3.LocalTextStyle
 import com.aware.app.ui.theme.Skin
@@ -234,6 +235,8 @@ fun AwareApp(
     onAppearanceChange: (Appearance) -> Unit,
     skin: Skin,
     onSkinChange: (Skin) -> Unit,
+    cozyPalette: CozyPalette,
+    onCozyPaletteChange: (CozyPalette) -> Unit,
     viewModel: MainViewModel,
     widgetTransactionId: Long?,
     onWidgetTransactionHandled: () -> Unit,
@@ -270,6 +273,7 @@ fun AwareApp(
     var showCategoryForIncome by remember { mutableStateOf<Boolean?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showSkin by remember { mutableStateOf(false) }
+    var showCozyPalette by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(restoreReady) { if (restoreReady) showRestorePassword = true }
     LaunchedEffect(widgetTransactionId) {
@@ -333,7 +337,7 @@ fun AwareApp(
                     },
                     { showAccountManager = true }, { showCategoryForIncome = it }, { showGroqKey = true }, { showBackupPassword = true }, onExportCsv, onChooseRestore,
                     { showOpenSourceNotice = true }, appearance, { showAppearance = true },
-                    skin, { showSkin = true }, Modifier.padding(padding),
+                    skin, { showSkin = true }, cozyPalette, { showCozyPalette = true }, Modifier.padding(padding),
                 )
             }
         }
@@ -366,6 +370,22 @@ fun AwareApp(
                 selected = skin == option,
                 onClick = { onSkinChange(option) },
                 swatch = skinSwatch(option),
+            )
+        }
+    }
+    if (showCozyPalette) AwareDialog("Cozy palette", { showCozyPalette = false }) {
+        Text(
+            "Each palette has a carefully tuned light and dark version. Appearance still controls which one you see.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val darkPreview = MaterialTheme.colorScheme.background.luminance() < .4f
+        CozyPalette.entries.forEach { option ->
+            ChoiceCard(
+                title = option.label,
+                subtitle = option.blurb,
+                selected = cozyPalette == option,
+                onClick = { onCozyPaletteChange(option) },
+                swatch = cozyPaletteSwatch(option, darkPreview),
             )
         }
     }
@@ -447,6 +467,24 @@ fun AwareApp(
 private fun skinSwatch(skin: Skin): List<Color> = when (skin) {
     Skin.COZY -> listOf(CozyPaper, CozyPowderBlue, CozyPistachio, CozyApricot, CozyLavender)
     Skin.MAXIMAL -> listOf(Void, NeonLime, NeonMagenta, NeonCyan, NeonViolet)
+}
+
+private fun cozyPaletteSwatch(palette: CozyPalette, dark: Boolean): List<Color> = when (palette) {
+    CozyPalette.OAT_GARDEN -> if (dark) {
+        listOf(Color(0xFF1B1816), Color(0xFFC9DDAA), Color(0xFFB5CDD2), Color(0xFFD3939A), Color(0xFFE3B582))
+    } else {
+        listOf(Color(0xFFFFF9F0), CozyPistachio, CozyPowderBlue, CozyDustyRose, CozyApricot)
+    }
+    CozyPalette.SAGE_ROSE -> if (dark) {
+        listOf(Color(0xFF141914), Color(0xFFAEB8A0), Color(0xFFD4AAA5), Color(0xFFB8CECB), Color(0xFFE1BA88))
+    } else {
+        listOf(Color(0xFFFBF8F1), Color(0xFFAEB8A0), Color(0xFFD5B2AC), Color(0xFFBED0D0), Color(0xFFE0B988))
+    }
+    CozyPalette.PLUM_HEARTH -> if (dark) {
+        listOf(Color(0xFF130E11), Color(0xFF351E28), Color(0xFFD5A4B5), Color(0xFFD9B982), Color(0xFFAFC5A7))
+    } else {
+        listOf(Color(0xFFFFF7F4), Color(0xFFD4A7B5), Color(0xFFE7C48F), Color(0xFFAFC1A5), Color(0xFFB9CBD2))
+    }
 }
 
 @Composable
@@ -1666,6 +1704,8 @@ private fun SettingsScreen(
     onAppearance: () -> Unit,
     skin: Skin,
     onSkin: () -> Unit,
+    cozyPalette: CozyPalette,
+    onCozyPalette: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp)) {
@@ -1682,6 +1722,9 @@ private fun SettingsScreen(
             AwareSettingsGroup {
                 AwareSettingsLink(Icons.Default.Palette, "Theme", skin.label, LocalTokens.current.pink, onSkin)
                 AwareSettingsLink(Icons.Default.Contrast, "Appearance", appearance.label, LocalTokens.current.violet, onAppearance)
+                if (skin == Skin.COZY) {
+                    AwareSettingsLink(Icons.Default.Palette, "Cozy palette", cozyPalette.label, LocalTokens.current.accent, onCozyPalette)
+                }
             }
         }
         item { AwareSettingsSection("GENERAL") }

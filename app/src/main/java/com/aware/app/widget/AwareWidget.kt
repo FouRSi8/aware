@@ -36,6 +36,7 @@ import com.aware.app.MainActivity
 import com.aware.app.data.CaptureCandidateEntity
 
 import com.aware.app.ui.theme.Appearance
+import com.aware.app.ui.theme.CozyPalette
 import com.aware.app.ui.theme.Skin
 import java.text.NumberFormat
 import java.util.Locale
@@ -52,22 +53,44 @@ class AwareWidget : GlanceAppWidget() {
         val prefs = context.getSharedPreferences("appearance", Context.MODE_PRIVATE)
         val appearance = Appearance.fromKey(prefs.getString("mode_key", null) ?: prefs.getString("mode", null))
         val skin = Skin.fromKey(prefs.getString("skin_key", null) ?: prefs.getString("skin", null))
-        provideContent { WidgetContent(candidate, count, appearance, skin) }
+        val cozyPalette = CozyPalette.fromKey(prefs.getString("cozy_palette_key", null))
+        provideContent { WidgetContent(candidate, count, appearance, skin, cozyPalette) }
     }
 }
 
 @Composable
-private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, appearance: Appearance, skin: Skin) {
+private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, appearance: Appearance, skin: Skin, cozyPalette: CozyPalette) {
     fun themed(light: Color, dark: Color) = when (appearance) {
         Appearance.LIGHT -> ColorProvider(light, light)
         Appearance.DARK -> ColorProvider(dark, dark)
         Appearance.SYSTEM -> ColorProvider(light, dark)
     }
     val maximal = skin == Skin.MAXIMAL
-    val background = if (maximal) themed(Color(0xFFFFFFFF), Color(0xFF08080A)) else themed(Color(0xFFFFF9F0), Color(0xFF1B1816))
-    val foreground = if (maximal) themed(Color(0xFF08080A), Color(0xFFF7F7FA)) else themed(Color(0xFF312B27), Color(0xFFF6EEE4))
-    val secondary = if (maximal) themed(Color(0xFF54545E), Color(0xFF9A9AA6)) else themed(Color(0xFF6E625A), Color(0xFFCABDB1))
-    val accent = if (maximal) Color(0xFFC6FF3D) else Color(0xFFD9E8B5)
+    val background = if (maximal) themed(Color(0xFFFFFFFF), Color(0xFF08080A)) else when (cozyPalette) {
+        CozyPalette.OAT_GARDEN -> themed(Color(0xFFFFF9F0), Color(0xFF1B1816))
+        CozyPalette.SAGE_ROSE -> themed(Color(0xFFFBF8F1), Color(0xFF141914))
+        CozyPalette.PLUM_HEARTH -> themed(Color(0xFFFFF7F4), Color(0xFF130E11))
+    }
+    val foreground = if (maximal) themed(Color(0xFF08080A), Color(0xFFF7F7FA)) else when (cozyPalette) {
+        CozyPalette.OAT_GARDEN -> themed(Color(0xFF312B27), Color(0xFFF6EEE4))
+        CozyPalette.SAGE_ROSE -> themed(Color(0xFF30342E), Color(0xFFF2EFE8))
+        CozyPalette.PLUM_HEARTH -> themed(Color(0xFF382A31), Color(0xFFF7ECEE))
+    }
+    val secondary = if (maximal) themed(Color(0xFF54545E), Color(0xFF9A9AA6)) else when (cozyPalette) {
+        CozyPalette.OAT_GARDEN -> themed(Color(0xFF6E625A), Color(0xFFCABDB1))
+        CozyPalette.SAGE_ROSE -> themed(Color(0xFF665F57), Color(0xFFCEC4B8))
+        CozyPalette.PLUM_HEARTH -> themed(Color(0xFF6F5C63), Color(0xFFD5C0C6))
+    }
+    val accent = if (maximal) themed(Color(0xFF9BE000), Color(0xFFC6FF3D)) else when (cozyPalette) {
+        CozyPalette.OAT_GARDEN -> themed(Color(0xFFD9E8B5), Color(0xFFC9DDAA))
+        CozyPalette.SAGE_ROSE -> themed(Color(0xFFD5B2AC), Color(0xFFD4AAA5))
+        CozyPalette.PLUM_HEARTH -> themed(Color(0xFFE7C48F), Color(0xFFD9B982))
+    }
+    val onAccent = if (maximal) themed(Color(0xFF08080A), Color(0xFF08080A)) else when (cozyPalette) {
+        CozyPalette.OAT_GARDEN -> themed(Color(0xFF312B27), Color(0xFF312B27))
+        CozyPalette.SAGE_ROSE -> themed(Color(0xFF332927), Color(0xFF2A201F))
+        CozyPalette.PLUM_HEARTH -> themed(Color(0xFF382A23), Color(0xFF2A1D18))
+    }
     Column(
         modifier = GlanceModifier.fillMaxSize().background(background).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -91,10 +114,10 @@ private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, appear
                 Text(
                     label,
                     modifier = GlanceModifier
-                        .background(cp(accent))
+                        .background(accent)
                         .padding(horizontal = 14.dp, vertical = 10.dp)
                         .clickable(actionRunCallback<WidgetCandidateAction>(actionParametersOf(CandidateIdKey to candidate.id))),
-                    style = TextStyle(color = cp(if (maximal) Color(0xFF060A07) else Color(0xFF312B27)), fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                    style = TextStyle(color = onAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold),
                 )
             }
         }
@@ -118,8 +141,6 @@ class WidgetCandidateAction : ActionCallback {
 
 private val CandidateIdKey = ActionParameters.Key<Long>("candidate_id")
 const val HIGH_CONFIDENCE = 0.82f
-private fun cp(color: Color) = ColorProvider(color, color)
-
 private fun formatMoney(paise: Long): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).apply {
     maximumFractionDigits = if (paise % 100L == 0L) 0 else 2
 }.format(paise / 100.0)
