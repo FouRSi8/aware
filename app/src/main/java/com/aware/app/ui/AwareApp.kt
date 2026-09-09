@@ -370,6 +370,7 @@ fun AwareApp(
                     Appearance.SYSTEM -> "Match whatever the phone is doing."
                     Appearance.LIGHT -> "Always bright."
                     Appearance.DARK -> "Always dim."
+                    Appearance.OLED -> "True black pixels for OLED displays."
                 },
                 selected = appearance == option,
                 onClick = { onAppearanceChange(option) },

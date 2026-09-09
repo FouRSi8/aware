@@ -118,14 +118,19 @@ class MainActivity : FragmentActivity() {
             val dark = when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
                 Appearance.LIGHT -> false
-                Appearance.DARK -> true
+                Appearance.DARK, Appearance.OLED -> true
             }
             val baseDensity = LocalDensity.current
             val comfortableDensity = remember(baseDensity.density, baseDensity.fontScale) {
                 Density(baseDensity.density * 1.08f, baseDensity.fontScale)
             }
             CompositionLocalProvider(LocalDensity provides comfortableDensity) {
-                AwareTheme(skin = skin, cozyPalette = cozyPalette, darkTheme = dark) {
+                AwareTheme(
+                    skin = skin,
+                    cozyPalette = cozyPalette,
+                    darkTheme = dark,
+                    oledBlack = appearance == Appearance.OLED,
+                ) {
                     if (unlocked) AwareApp(
                     appearance = appearance,
                     onAppearanceChange = {

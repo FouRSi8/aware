@@ -68,10 +68,13 @@ private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, report
     fun themed(light: Color, dark: Color) = when (appearance) {
         Appearance.LIGHT -> ColorProvider(light, light)
         Appearance.DARK -> ColorProvider(dark, dark)
+        Appearance.OLED -> ColorProvider(dark, dark)
         Appearance.SYSTEM -> ColorProvider(light, dark)
     }
     val maximal = skin == Skin.MAXIMAL
-    val background = if (maximal) themed(Color(0xFFFFFFFF), Color(0xFF08080A)) else when (cozyPalette) {
+    val background = if (appearance == Appearance.OLED) {
+        ColorProvider(Color.Black, Color.Black)
+    } else if (maximal) themed(Color(0xFFFFFFFF), Color(0xFF08080A)) else when (cozyPalette) {
         CozyPalette.OAT_GARDEN -> themed(Color(0xFFFFF9F0), Color(0xFF1B1816))
         CozyPalette.SAGE_ROSE -> themed(Color(0xFFFBF8F1), Color(0xFF141914))
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFFFFF7F4), Color(0xFF130E11))

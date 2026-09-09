@@ -91,7 +91,8 @@ enum class Skin(val key: String, val label: String, val blurb: String) {
 enum class Appearance(val key: String, val label: String) {
     SYSTEM("system", "System"),
     LIGHT("light", "Light"),
-    DARK("dark", "Dark");
+    DARK("dark", "Dark"),
+    OLED("oled", "OLED black");
 
     companion object {
         fun fromKey(key: String?): Appearance =
@@ -120,7 +121,7 @@ enum class CozyPalette(val key: String, val label: String, val blurb: String) {
  * palette constants so both skins - and both brightnesses - stay correct.
  */
 @Immutable
-class AwareTokens(
+data class AwareTokens(
     val accent: Color,
     val onAccent: Color,
     val hero: Color,
@@ -423,9 +424,10 @@ fun AwareTheme(
     skin: Skin = Skin.COZY,
     cozyPalette: CozyPalette = CozyPalette.OAT_GARDEN,
     darkTheme: Boolean = isSystemInDarkTheme(),
+    oledBlack: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val scheme = when {
+    val baseScheme = when {
         skin == Skin.MAXIMAL && darkTheme -> MaximalDark
         skin == Skin.MAXIMAL -> MaximalLight
         cozyPalette == CozyPalette.SAGE_ROSE && darkTheme -> SageRoseDark
@@ -435,7 +437,7 @@ fun AwareTheme(
         darkTheme -> CozyDark
         else -> CozyLight
     }
-    val tokens = when {
+    val baseTokens = when {
         skin == Skin.MAXIMAL && darkTheme -> MaximalDarkTokens
         skin == Skin.MAXIMAL -> MaximalLightTokens
         cozyPalette == CozyPalette.SAGE_ROSE && darkTheme -> SageRoseDarkTokens
@@ -444,6 +446,23 @@ fun AwareTheme(
         cozyPalette == CozyPalette.PLUM_HEARTH -> PlumHearthLightTokens
         darkTheme -> CozyDarkTokens
         else -> CozyLightTokens
+    }
+    val scheme = if (darkTheme && oledBlack) {
+        baseScheme.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceDim = Color.Black,
+            surfaceContainerLowest = Color.Black,
+            surfaceContainerLow = Color.Black,
+            surfaceContainer = Color.Black,
+        )
+    } else {
+        baseScheme
+    }
+    val tokens = if (darkTheme && oledBlack) {
+        baseTokens.copy(navBar = Color.Black, panel = Color.Black)
+    } else {
+        baseTokens
     }
     val view = LocalView.current
     SideEffect {
