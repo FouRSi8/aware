@@ -31,6 +31,7 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider as GlanceColorProvider
 import com.aware.app.AwareApplication
 import com.aware.app.MainActivity
 import com.aware.app.data.CaptureCandidateEntity
@@ -100,44 +101,116 @@ private fun WidgetContent(candidate: CaptureCandidateEntity?, count: Int, report
         CozyPalette.PLUM_HEARTH -> themed(Color(0xFF382A23), Color(0xFF2A1D18))
     }
     Column(
-        modifier = GlanceModifier.fillMaxSize().background(background).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = GlanceModifier.fillMaxSize().background(background).padding(if (maximal) 14.dp else 18.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("AWARE", style = TextStyle(color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-            Spacer(GlanceModifier.defaultWeight())
-            if (count > 0) Text("$count PENDING", style = TextStyle(color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-        }
-        Spacer(GlanceModifier.height(7.dp))
-        if (report == null) {
-            Text("Your weekly report is being prepared", style = TextStyle(color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Medium))
+        if (maximal) {
+            MaximalReport(report, count, foreground, secondary, accent)
         } else {
-            Text(weekLabel(report), style = TextStyle(color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-            Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = GlanceModifier.defaultWeight()) {
-                    Text(formatMoney(report.spendingPaise), style = TextStyle(color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold))
-                    Text("spent · net ${formatSignedMoney(report.incomePaise + report.refundPaise - report.spendingPaise)}", style = TextStyle(color = secondary, fontSize = 11.sp))
-                }
-            }
+            CozyReport(report, count, foreground, secondary, accent, onAccent)
         }
         candidate?.let {
-            Spacer(GlanceModifier.height(8.dp))
-            Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = GlanceModifier.defaultWeight()) {
-                    Text(formatMoney(it.amountPaise), style = TextStyle(color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold))
-                    Text(it.merchant.take(22), style = TextStyle(color = secondary, fontSize = 11.sp))
-                }
-                Spacer(GlanceModifier.width(8.dp))
-                Text(
-                    "REVIEW  →",
-                    modifier = GlanceModifier
-                        .background(accent)
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .clickable(actionRunCallback<WidgetCandidateAction>(actionParametersOf(CandidateIdKey to it.id))),
-                    style = TextStyle(color = onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                )
-            }
+            Spacer(GlanceModifier.defaultWeight())
+            PaymentReview(it, maximal, foreground, secondary, accent, onAccent)
         }
+    }
+}
+
+@Composable
+private fun CozyReport(
+    report: WeeklyReportEntity?,
+    count: Int,
+    foreground: GlanceColorProvider,
+    secondary: GlanceColorProvider,
+    accent: GlanceColorProvider,
+    onAccent: GlanceColorProvider,
+) {
+    Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("aware", style = TextStyle(color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.defaultWeight())
+        if (count > 0) {
+            Text(
+                "$count to review",
+                modifier = GlanceModifier.background(accent).padding(horizontal = 10.dp, vertical = 5.dp),
+                style = TextStyle(color = onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            )
+        }
+    }
+    Spacer(GlanceModifier.height(14.dp))
+    if (report == null) {
+        Text("Your week,\nnearly ready", style = TextStyle(color = foreground, fontSize = 30.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.height(6.dp))
+        Text("We’re preparing your first cozy report.", style = TextStyle(color = secondary, fontSize = 12.sp))
+        return
+    }
+    Text(weekLabel(report).removePrefix("WEEKLY REPORT · "), style = TextStyle(color = secondary, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+    Spacer(GlanceModifier.height(2.dp))
+    Text(formatMoney(report.spendingPaise), style = TextStyle(color = foreground, fontSize = 40.sp, fontWeight = FontWeight.Bold))
+    Text("spent this week", style = TextStyle(color = secondary, fontSize = 13.sp))
+    Spacer(GlanceModifier.height(12.dp))
+    Text(
+        "net  ${formatSignedMoney(report.incomePaise + report.refundPaise - report.spendingPaise)}",
+        modifier = GlanceModifier.background(accent).padding(horizontal = 12.dp, vertical = 7.dp),
+        style = TextStyle(color = onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+    )
+}
+
+@Composable
+private fun MaximalReport(
+    report: WeeklyReportEntity?,
+    count: Int,
+    foreground: GlanceColorProvider,
+    secondary: GlanceColorProvider,
+    accent: GlanceColorProvider,
+) {
+    Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("AWARE // WEEK", style = TextStyle(color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.defaultWeight())
+        if (count > 0) Text("[$count PENDING]", style = TextStyle(color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+    }
+    Spacer(GlanceModifier.height(11.dp))
+    if (report == null) {
+        Text("REPORT\nLOADING_", style = TextStyle(color = foreground, fontSize = 32.sp, fontWeight = FontWeight.Bold))
+        return
+    }
+    Text(weekLabel(report).removePrefix("WEEKLY REPORT · ").uppercase(Locale.ENGLISH), style = TextStyle(color = secondary, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+    Text(formatMoney(report.spendingPaise), style = TextStyle(color = foreground, fontSize = 46.sp, fontWeight = FontWeight.Bold))
+    Text("OUT // THIS WEEK", style = TextStyle(color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+    Spacer(GlanceModifier.height(10.dp))
+    Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("NET_POSITION", style = TextStyle(color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.defaultWeight())
+        Text(
+            formatSignedMoney(report.incomePaise + report.refundPaise - report.spendingPaise),
+            style = TextStyle(color = accent, fontSize = 18.sp, fontWeight = FontWeight.Bold),
+        )
+    }
+}
+
+@Composable
+private fun PaymentReview(
+    candidate: CaptureCandidateEntity,
+    maximal: Boolean,
+    foreground: GlanceColorProvider,
+    secondary: GlanceColorProvider,
+    accent: GlanceColorProvider,
+    onAccent: GlanceColorProvider,
+) {
+    Spacer(GlanceModifier.height(10.dp))
+    Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = GlanceModifier.defaultWeight()) {
+            Text(formatMoney(candidate.amountPaise), style = TextStyle(color = foreground, fontSize = if (maximal) 18.sp else 16.sp, fontWeight = FontWeight.Bold))
+            Text(candidate.merchant.take(22), style = TextStyle(color = secondary, fontSize = 11.sp))
+        }
+        Spacer(GlanceModifier.width(8.dp))
+        Text(
+            if (maximal) "[REVIEW →]" else "Review →",
+            modifier = GlanceModifier
+                .background(accent)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clickable(actionRunCallback<WidgetCandidateAction>(actionParametersOf(CandidateIdKey to candidate.id))),
+            style = TextStyle(color = onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+        )
     }
 }
 

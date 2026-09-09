@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.2.4" src="https://img.shields.io/badge/latest-v1.2.4-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.2.5" src="https://img.shields.io/badge/latest-v1.2.5-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -45,7 +45,7 @@ an analytics company or requiring an account.
 |---|---|---|
 | New UPI, bank, card, ATM, salary, refund, and reversal SMS detection | Today, week, month, and custom-period views | Overall, category, account, and payee budgets |
 | Review-only Google Pay and super.money notification capture | Category, payee, and tag breakdowns | Daily, weekly, monthly, yearly, and one-time periods |
-| Responsive home-screen widget with weekly reports and payment review | Weekly spending, income, net movement, and top merchant | Expected recurring income and expenses |
+| Skin-aware home-screen widget with Cozy and f@#k cozy layouts, weekly reports, and payment review | Weekly spending, income, net movement, and top merchant | Expected recurring income and expenses |
 | Local deterministic parser with deduplication | Largest spending days and month comparison | Merchant rules and category learning |
 | Editable expense, income, transfer, and refund entries | Bank-to-cash transfers stay out of spending | Custom accounts, categories, payees, and tags |
 
@@ -74,7 +74,7 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest version available: v1.2.4.** The newest source is always on
+> **Latest version available: v1.2.5.** The newest source is always on
 > [`main`](https://github.com/FouRSi8/aware/tree/main). This version adds
 > review-only Google Pay and super.money notification capture, transaction
 > details/edit/delete, save confirmation animation, and weekly widget reports.

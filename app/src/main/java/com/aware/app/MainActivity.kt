@@ -61,10 +61,20 @@ class MainActivity : FragmentActivity() {
     private var incomingReviewCandidateId by mutableStateOf<Long?>(null)
     private var incomingWidgetTransactionId by mutableStateOf<Long?>(null)
     private var paymentNotificationAccessGranted by mutableStateOf(false)
+    private var launcherSkin = Skin.COZY
+    private var launcherCozyPalette = CozyPalette.OAT_GARDEN
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as AwareApplication
+        val initialAppearancePrefs = getSharedPreferences("appearance", MODE_PRIVATE)
+        launcherSkin = Skin.fromKey(
+            initialAppearancePrefs.getString("skin_key", null)
+                ?: initialAppearancePrefs.getString("skin", null),
+        )
+        launcherCozyPalette = CozyPalette.fromKey(
+            initialAppearancePrefs.getString("cozy_palette_key", null),
+        )
         val lockEnabled = app.container.secureStore.getBoolean("app_lock")
         unlocked = !lockEnabled
         if (lockEnabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -113,7 +123,14 @@ class MainActivity : FragmentActivity() {
                 mutableStateOf(CozyPalette.fromKey(appearancePrefs.getString("cozy_palette_key", null)))
             }
             LaunchedEffect(skin, cozyPalette) {
-                LauncherIconManager.sync(this@MainActivity, skin, cozyPalette)
+                // Disabling the alias that launched a running activity makes Android
+                // remove its task. Keep it until onStop, then clean up in the background.
+                LauncherIconManager.sync(
+                    this@MainActivity,
+                    skin,
+                    cozyPalette,
+                    keepEnabledClassName = intent.component?.className,
+                )
             }
             val dark = when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -141,6 +158,7 @@ class MainActivity : FragmentActivity() {
                     skin = skin,
                     onSkinChange = { next ->
                         skin = next
+                        launcherSkin = next
                         val editor = appearancePrefs.edit().putString("skin_key", next.key)
                         // The maximal skin is designed dark-first, so landing on
                         // it drops into dark unless the user has already pinned a
@@ -155,6 +173,7 @@ class MainActivity : FragmentActivity() {
                     cozyPalette = cozyPalette,
                     onCozyPaletteChange = { next ->
                         cozyPalette = next
+                        launcherCozyPalette = next
                         appearancePrefs.edit().putString("cozy_palette_key", next.key).apply()
                         scope.launch { com.aware.app.widget.AwareWidget().updateAll(this@MainActivity) }
                     },
@@ -255,6 +274,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
+        LauncherIconManager.sync(this, launcherSkin, launcherCozyPalette)
         val app = application as? AwareApplication ?: return
         if (app.container.secureStore.getBoolean("app_lock") && !isChangingConfigurations) {
             unlocked = false

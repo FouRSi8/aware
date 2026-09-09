@@ -14,7 +14,12 @@ object LauncherIconManager {
     private const val MAXIMAL = ".launcher.MaximalLauncher"
     private val aliases = listOf(OAT, SAGE, PLUM, MAXIMAL)
 
-    fun sync(context: Context, skin: Skin, cozyPalette: CozyPalette) {
+    fun sync(
+        context: Context,
+        skin: Skin,
+        cozyPalette: CozyPalette,
+        keepEnabledClassName: String? = null,
+    ) {
         val selected = when {
             skin == Skin.MAXIMAL -> MAXIMAL
             cozyPalette == CozyPalette.SAGE_ROSE -> SAGE
@@ -25,7 +30,9 @@ object LauncherIconManager {
 
         // Enable the destination first so the app always retains a launcher entry.
         setEnabled(packageManager, context, selected, true)
-        aliases.filterNot { it == selected }.forEach { alias ->
+        aliases.filterNot { alias ->
+            alias == selected || context.packageName + alias == keepEnabledClassName
+        }.forEach { alias ->
             setEnabled(packageManager, context, alias, false)
         }
     }
