@@ -20,6 +20,9 @@ import com.aware.app.data.TransactionStatus
 import com.aware.app.data.TransactionType
 import com.aware.app.ai.GroqCategorySuggester
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -39,6 +42,8 @@ data class MainUiState(
 )
 
 class MainViewModel(private val repository: AwareRepository, private val categorySuggester: GroqCategorySuggester) : ViewModel() {
+    private val messageEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val messages: SharedFlow<String> = messageEvents.asSharedFlow()
     private val selectedReview = MutableStateFlow<CaptureCandidateEntity?>(null)
     val reviewCandidate: StateFlow<CaptureCandidateEntity?> = selectedReview
     private val aiSuggestionState = MutableStateFlow<String?>(null)
@@ -68,7 +73,10 @@ class MainViewModel(private val repository: AwareRepository, private val categor
 
     fun openReview(id: Long) = viewModelScope.launch { selectedReview.value = repository.candidate(id) }
     fun closeReview() { selectedReview.value = null }
-    fun saveGroqKey(value: String) { categorySuggester.saveKey(value); groqConfiguredState.value = value.isNotBlank() }
+    fun saveGroqKey(value: String) = launchMutation("Couldn’t save the Groq key", "Groq key saved") {
+        categorySuggester.saveKey(value)
+        groqConfiguredState.value = value.isNotBlank()
+    }
     fun setAppLock(enabled: Boolean) { repository.setAppLock(enabled); appLockState.value = enabled }
     fun setSmartNudges(enabled: Boolean) { repository.setSmartNudges(enabled); smartNudgesState.value = enabled }
     fun suggestCategory(candidate: CaptureCandidateEntity) = viewModelScope.launch {
@@ -84,12 +92,15 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         accountId: Long?,
         destinationAccountId: Long?,
         learnRule: Boolean,
-    ) = viewModelScope.launch {
+    ) = launchMutation("Couldn’t add that captured payment") {
         repository.postCandidate(id, amountPaise, merchant, type, categoryId, accountId, destinationAccountId, learnRule)
         selectedReview.value = null
     }
 
-    fun dismissCandidate(id: Long) = viewModelScope.launch { repository.dismissCandidate(id); selectedReview.value = null }
+    fun dismissCandidate(id: Long) = launchMutation("Couldn’t discard that captured payment") {
+        repository.dismissCandidate(id)
+        selectedReview.value = null
+    }
 
     fun addManual(
         amountPaise: Long,
@@ -101,7 +112,7 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         note: String,
         tags: String,
         occurredAt: Long = System.currentTimeMillis(),
-    ) = viewModelScope.launch {
+    ) = launchMutation("Couldn’t add the transaction", "Transaction added") {
         repository.addTransaction(
             TransactionEntity(
                 amountPaise = amountPaise,
@@ -119,7 +130,9 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         )
     }
 
-    fun deleteTransaction(id: Long) = viewModelScope.launch { repository.deleteTransaction(id) }
+    fun deleteTransaction(id: Long) = launchMutation("Couldn’t delete the transaction", "Transaction deleted") {
+        repository.deleteTransaction(id)
+    }
 
     fun updateTransaction(
         transaction: TransactionEntity,
@@ -132,7 +145,7 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         note: String,
         tags: String,
         occurredAt: Long,
-    ) = viewModelScope.launch {
+    ) = launchMutation("Couldn’t save the transaction", "Transaction updated") {
         repository.updateTransaction(
             transaction.copy(
                 amountPaise = amountPaise,
@@ -159,7 +172,7 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         startAt: Long,
         endAt: Long?,
         isRecurring: Boolean,
-    ) = viewModelScope.launch {
+    ) = launchMutation("Couldn’t create the budget", "Budget created") {
         repository.addBudget(BudgetBucketEntity(
             monthKey = java.time.YearMonth.from(java.time.Instant.ofEpochMilli(startAt).atZone(ZoneId.systemDefault())).toString(),
             name = name,
@@ -175,11 +188,11 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         ))
     }
 
-    fun addAccount(name: String, kind: AccountKind, openingBalancePaise: Long) = viewModelScope.launch {
+    fun addAccount(name: String, kind: AccountKind, openingBalancePaise: Long) = launchMutation("Couldn’t add the account", "Account added") {
         repository.addAccount(AccountEntity(name = name, kind = kind, openingBalancePaise = openingBalancePaise))
     }
 
-    fun saveAccount(id: Long, name: String, kind: AccountKind, openingBalancePaise: Long, isDefault: Boolean) = viewModelScope.launch {
+    fun saveAccount(id: Long, name: String, kind: AccountKind, openingBalancePaise: Long, isDefault: Boolean) = launchMutation("Couldn’t save the account", "Account saved") {
         val existing = state.value.accounts.firstOrNull { it.id == id }
         repository.saveAccount(
             AccountEntity(
@@ -194,12 +207,27 @@ class MainViewModel(private val repository: AwareRepository, private val categor
         )
     }
 
-    fun addCategory(name: String, emoji: String, colorArgb: Long, isIncome: Boolean) = viewModelScope.launch {
+    fun addCategory(name: String, emoji: String, colorArgb: Long, isIncome: Boolean) = launchMutation("Couldn’t add the category", "Category added") {
         repository.addCategory(CategoryEntity(name = name.trim(), emoji = emoji.ifBlank { "✨" }, colorArgb = colorArgb, isIncome = isIncome))
     }
 
-    fun addRecurring(name: String, amountPaise: Long, type: TransactionType, accountId: Long, categoryId: Long?, cadence: RecurrenceCadence, customIntervalDays: Int, startAt: Long, endAt: Long?, reminderMinutesBefore: Int) = viewModelScope.launch {
+    fun addRecurring(name: String, amountPaise: Long, type: TransactionType, accountId: Long, categoryId: Long?, cadence: RecurrenceCadence, customIntervalDays: Int, startAt: Long, endAt: Long?, reminderMinutesBefore: Int) = launchMutation("Couldn’t add the recurring item", "Recurring item added") {
         repository.addRecurring(RecurringRuleEntity(name = name, amountPaise = amountPaise, type = type, accountId = accountId, categoryId = categoryId, cadence = cadence, customIntervalDays = customIntervalDays, startAt = startAt, endAt = endAt, nextExpectedAt = startAt, reminderMinutesBefore = reminderMinutesBefore))
+    }
+
+    private fun launchMutation(
+        failureMessage: String,
+        successMessage: String? = null,
+        operation: suspend () -> Unit,
+    ) = viewModelScope.launch {
+        runCatching { operation() }
+            .onSuccess { successMessage?.let { messageEvents.emit(it) } }
+            .onFailure { error ->
+                val detail = error.message
+                    ?.takeIf { it.isNotBlank() && !it.contains("SQL", ignoreCase = true) }
+                    ?.take(100)
+                messageEvents.emit(if (detail == null) "$failureMessage. Please try again." else "$failureMessage: $detail")
+            }
     }
 
     class Factory(private val repository: AwareRepository, private val categorySuggester: GroqCategorySuggester) : ViewModelProvider.Factory {

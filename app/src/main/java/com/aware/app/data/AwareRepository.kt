@@ -168,7 +168,10 @@ class AwareRepository(
         }
         id
     }
-    suspend fun addCategory(item: CategoryEntity) = database.categoryDao().insert(item)
+    suspend fun addCategory(item: CategoryEntity): Long {
+        require(database.categoryDao().byName(item.name) == null) { "A category named “${item.name}” already exists" }
+        return database.categoryDao().insert(item)
+    }
     suspend fun addBudget(item: BudgetBucketEntity) = database.budgetDao().upsert(item)
     suspend fun addRecurring(item: RecurringRuleEntity) = database.recurringDao().insert(item)
     suspend fun latestPending() = database.captureDao().latestPending()

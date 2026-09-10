@@ -303,6 +303,9 @@ fun AwareApp(
     var showCozyPalette by remember { mutableStateOf(false) }
     var showNotificationAccessDisclosure by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { message -> snackbarHostState.showSnackbar(message) }
+    }
     LaunchedEffect(restoreReady) { if (restoreReady) showRestorePassword = true }
     LaunchedEffect(state.pending.map { it.id to it.status }) { onRefreshWidget() }
     LaunchedEffect(widgetTransactionId) {
