@@ -318,6 +318,7 @@ fun AwareApp(
     var showStorage by remember { mutableStateOf(false) }
     var showCategoryForIncome by remember { mutableStateOf<Boolean?>(null) }
     var categoryManagerIncome by remember { mutableStateOf<Boolean?>(null) }
+    var editingCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryCreatedCallback by remember { mutableStateOf<((Long) -> Unit)?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showSkin by remember { mutableStateOf(false) }
@@ -453,6 +454,7 @@ fun AwareApp(
         state, initialType,
         onDismiss = { addType = null },
         onAddCategory = { isIncome, onCreated ->
+            editingCategory = null
             categoryCreatedCallback = onCreated
             showCategoryForIncome = isIncome
         },
@@ -481,8 +483,14 @@ fun AwareApp(
             categories = state.categories.filter { it.isIncome == isIncome },
             onDismiss = { categoryManagerIncome = null },
             onAdd = {
+                editingCategory = null
                 categoryCreatedCallback = null
                 showCategoryForIncome = isIncome
+            },
+            onEdit = { category ->
+                editingCategory = category
+                categoryCreatedCallback = null
+                showCategoryForIncome = category.isIncome
             },
         )
     }
@@ -580,6 +588,7 @@ fun AwareApp(
             transaction = transaction,
             onDismiss = { editingTransaction = null },
             onAddCategory = { isIncome, onCreated ->
+                editingCategory = null
                 categoryCreatedCallback = onCreated
                 showCategoryForIncome = isIncome
             },
@@ -639,14 +648,24 @@ fun AwareApp(
         )
     }
     showCategoryForIncome?.let { isIncome ->
-        CategoryDialog(isIncome, {
-            categoryCreatedCallback = null
-            showCategoryForIncome = null
-        }) { name, emoji, color ->
-            viewModel.addCategory(name, emoji, color, isIncome) { id ->
-                categoryCreatedCallback?.invoke(id)
+        val category = editingCategory
+        CategoryDialog(
+            isIncome = isIncome,
+            category = category,
+            onDismiss = {
+                editingCategory = null
                 categoryCreatedCallback = null
                 showCategoryForIncome = null
+            },
+        ) { name, emoji, color, complete ->
+            viewModel.saveCategory(category?.id ?: 0L, name, emoji, color, isIncome) { result ->
+                complete(result)
+                result.onSuccess { id ->
+                    if (category == null) categoryCreatedCallback?.invoke(id)
+                    editingCategory = null
+                    categoryCreatedCallback = null
+                    showCategoryForIncome = null
+                }
             }
         }
     }
@@ -3094,6 +3113,7 @@ private fun CategoryManagerDialog(
     categories: List<CategoryEntity>,
     onDismiss: () -> Unit,
     onAdd: () -> Unit,
+    onEdit: (CategoryEntity) -> Unit,
 ) {
     val kind = if (isIncome) "income" else "expense"
     AwareDialog(if (isIncome) "Income categories" else "Expense categories", onDismiss) {
@@ -3123,7 +3143,7 @@ private fun CategoryManagerDialog(
             categories.forEach { category ->
                 val categoryColor = Color(category.colorArgb)
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().clickable { onEdit(category) },
                     shape = awareShape(14.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -3146,6 +3166,13 @@ private fun CategoryManagerDialog(
                             )
                         }
                         Box(Modifier.size(10.dp).clip(CircleShape).background(categoryColor))
+                        Spacer(Modifier.width(12.dp))
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit ${category.name}",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(19.dp),
+                        )
                     }
                 }
             }
@@ -3154,9 +3181,16 @@ private fun CategoryManagerDialog(
 }
 
 @Composable
-private fun CategoryDialog(isIncome: Boolean, onDismiss: () -> Unit, onSave: (String, String, Long) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var emoji by remember { mutableStateOf("") }
+private fun CategoryDialog(
+    isIncome: Boolean,
+    category: CategoryEntity?,
+    onDismiss: () -> Unit,
+    onSave: (String, String, Long, (Result<Long>) -> Unit) -> Unit,
+) {
+    var name by remember(category?.id) { mutableStateOf(category?.name.orEmpty()) }
+    var emoji by remember(category?.id) { mutableStateOf(category?.emoji.orEmpty()) }
+    var saving by remember(category?.id) { mutableStateOf(false) }
+    var errorMessage by remember(category?.id) { mutableStateOf<String?>(null) }
     val t = LocalTokens.current
     // Category swatches are a choice set, not a token showcase. Some theme
     // roles intentionally share a colour, so deriving this row from role
@@ -3170,20 +3204,32 @@ private fun CategoryDialog(isIncome: Boolean, onDismiss: () -> Unit, onSave: (St
             CozyDustyRose, CozySage, CozyNegative, Color(0xFFE6C7A6),
         )
     }
-    var selectedColor by remember(t) { mutableStateOf(palette.first()) }
-    AwareDialog(if (isIncome) "New income option" else "New spending option", onDismiss) {
+    var selectedColor by remember(category?.id, t) { mutableStateOf(category?.let { Color(it.colorArgb) } ?: palette.first()) }
+    AwareDialog(
+        when {
+            category != null && isIncome -> "Edit income category"
+            category != null -> "Edit expense category"
+            isIncome -> "New income category"
+            else -> "New expense category"
+        },
+        onDismiss,
+    ) {
         Text(
-            "Create a reusable category that appears immediately in every matching picker.",
+            if (category == null) {
+                "Create a reusable category that appears immediately in every matching picker."
+            } else {
+                "Changes apply anywhere this category is already used."
+            },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
         OutlinedTextField(
-            name, { name = it }, Modifier.fillMaxWidth(),
+            name, { name = it; errorMessage = null }, Modifier.fillMaxWidth(),
             label = { Text(if (isIncome) "Income label" else "Category name") },
             colors = cozyFieldColors(), singleLine = true,
         )
         OutlinedTextField(
-            emoji, { emoji = it.take(4) }, Modifier.fillMaxWidth(),
+            emoji, { emoji = it.take(4); errorMessage = null }, Modifier.fillMaxWidth(),
             label = { Text("Emoji or symbol") }, placeholder = { Text("✨") },
             colors = cozyFieldColors(), singleLine = true,
         )
@@ -3198,11 +3244,45 @@ private fun CategoryDialog(isIncome: Boolean, onDismiss: () -> Unit, onSave: (St
                 )
             }
         }
+        errorMessage?.let { message ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = awareShape(12.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+            ) {
+                Text(
+                    message,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
         Button(
-            onClick = { onSave(name.trim(), emoji.ifBlank { "✨" }, selectedColor.value.toLong()) },
-            enabled = name.isNotBlank(), modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                saving = true
+                errorMessage = null
+                onSave(name.trim(), emoji.ifBlank { "✨" }, selectedColor.value.toLong()) { result ->
+                    saving = false
+                    result.exceptionOrNull()?.let { error ->
+                        errorMessage = error.message
+                            ?.takeIf { it.isNotBlank() && !it.contains("SQL", ignoreCase = true) }
+                            ?.take(120)
+                            ?: "Couldn’t save this category. Please try again."
+                    }
+                }
+            },
+            enabled = name.isNotBlank() && !saving,
+            modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.accent, contentColor = LocalTokens.current.onAccent),
-        ) { Text("Add custom option", fontWeight = FontWeight.Bold) }
+        ) {
+            if (saving) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalTokens.current.onAccent)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(if (category == null) "Create category" else "Save changes", fontWeight = FontWeight.Bold)
+        }
     }
 }
 

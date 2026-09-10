@@ -176,9 +176,17 @@ class AwareRepository(
         }
         id
     }
-    suspend fun addCategory(item: CategoryEntity): Long {
-        require(database.categoryDao().byName(item.name) == null) { "A category named “${item.name}” already exists" }
-        return database.categoryDao().insert(item)
+    suspend fun addCategory(item: CategoryEntity): Long = saveCategory(item)
+
+    suspend fun saveCategory(item: CategoryEntity): Long {
+        val duplicate = database.categoryDao().byName(item.name)
+        require(duplicate == null || duplicate.id == item.id) { "A category named “${item.name}” already exists" }
+        return if (item.id == 0L) {
+            database.categoryDao().insert(item)
+        } else {
+            database.categoryDao().update(item)
+            item.id
+        }
     }
     suspend fun addBudget(item: BudgetBucketEntity) = database.budgetDao().upsert(item)
     suspend fun addRecurring(item: RecurringRuleEntity) = database.recurringDao().insert(item)

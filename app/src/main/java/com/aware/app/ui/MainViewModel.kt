@@ -412,32 +412,37 @@ class MainViewModel(
         )
     }
 
-    fun addCategory(
+    fun saveCategory(
+        id: Long,
         name: String,
         emoji: String,
         colorArgb: Long,
         isIncome: Boolean,
-        onAdded: (Long) -> Unit = {},
+        onResult: (Result<Long>) -> Unit,
     ) = viewModelScope.launch {
-        runCatching {
-            repository.addCategory(
+        val result = runCatching {
+            val existing = state.value.categories.firstOrNull { it.id == id }
+            repository.saveCategory(
                 CategoryEntity(
+                    id = id,
                     name = name.trim(),
                     emoji = emoji.ifBlank { "✨" },
                     colorArgb = colorArgb,
                     isIncome = isIncome,
+                    isArchived = existing?.isArchived ?: false,
                 ),
             )
-        }.onSuccess { id ->
-            onAdded(id)
-            messageEvents.emit("Category added")
+        }
+        onResult(result)
+        result.onSuccess {
+            messageEvents.emit(if (id == 0L) "Category added" else "Category updated")
         }.onFailure { error ->
             val detail = error.message
                 ?.takeIf { it.isNotBlank() && !it.contains("SQL", ignoreCase = true) }
                 ?.take(100)
             messageEvents.emit(
-                if (detail == null) "Couldn’t add the category. Please try again."
-                else "Couldn’t add the category: $detail",
+                if (detail == null) "Couldn’t save the category. Please try again."
+                else "Couldn’t save the category: $detail",
             )
         }
     }
