@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable enum class AccountKind { BANK, UPI, CASH }
 @Serializable enum class TransactionType { INCOME, EXPENSE, TRANSFER, REFUND, ADJUSTMENT }
 @Serializable enum class TransactionStatus { EXPECTED, PENDING_REVIEW, POSTED, DISMISSED, REVERSED }
-@Serializable enum class TransactionSource { SMS, NOTIFICATION, MANUAL, RECURRING }
+@Serializable enum class TransactionSource { SMS, NOTIFICATION, MANUAL, RECURRING, STATEMENT }
 @Serializable enum class RecurrenceCadence { DAILY, WEEKLY, MONTHLY, YEARLY, CUSTOM }
 @Serializable enum class BudgetScope { OVERALL, CATEGORY, ACCOUNT, PAYEE }
 @Serializable enum class BudgetPeriod { DAILY, WEEKLY, MONTHLY, YEARLY }

@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.3.2" src="https://img.shields.io/badge/latest-v1.3.2-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.4.0" src="https://img.shields.io/badge/latest-v1.4.0-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -37,6 +37,12 @@
 
 <p align="center"><sub>Linen café · Navy tide · Charcoal &amp; leather</sub></p>
 
+<p align="center">
+  <img src="docs/media/statement-import.png" alt="aware bank statement review" width="31%" />
+</p>
+
+<p align="center"><sub>Review every statement row before it reaches your ledger</sub></p>
+
 ## Your money, without the surveillance
 
 aware is built around one idea: recording a purchase should be effortless, but
@@ -55,6 +61,7 @@ an analytics company or requiring an account.
 | Review-only Google Pay and super.money notification capture | Category, payee, and tag breakdowns | Daily, weekly, monthly, yearly, and one-time periods |
 | Skin-aware home-screen widget with Cozy and f@#k cozy layouts, weekly reports, and payment review | Weekly spending, income, net movement, and top merchant | Expected recurring income and expenses |
 | Local deterministic parser with deduplication | Largest spending days and month comparison | Merchant rules and category learning |
+| Review-first CSV, XLS, and password-protected XLSX statement import | Debit/credit and running-balance reconciliation | Optional, redacted Groq category suggestions |
 | Editable expense, income, transfer, and refund entries | Bank-to-cash transfers stay out of spending | Custom accounts, categories, payees, and tags |
 
 ### Two complete visual identities
@@ -77,15 +84,16 @@ while changing typography, shape, surface treatment, and information chrome.
 - Removes encrypted raw SMS text when resolved or after seven days.
 - Has no account, advertisements, analytics SDK, or cloud synchronization.
 - Sends no SMS, balances, account numbers, UPI IDs, phone numbers, or references to AI.
+- Reads bank statements locally, forgets one-use workbook passwords, and stores only rows the user approves.
 - Creates password-encrypted backups; CSV export is explicitly unencrypted.
 
 Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest version available: v1.3.2.** The newest source is always on
-> [`main`](https://github.com/FouRSi8/aware/tree/main). Create, edit, and delete
-> operations now fail safely with clear feedback instead of closing the app.
+> **Latest version available: v1.4.0.** The newest source is always on
+> [`main`](https://github.com/FouRSi8/aware/tree/main). This release adds private,
+> review-first bank-statement import and local storage housekeeping.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps and SMS permission;
@@ -111,6 +119,7 @@ or provide `ANDROID_HOME`. The APK is written to `app/build/outputs/apk/debug/ap
 
 ```text
 SMS / PAYMENT NOTIFICATION ──→ local parser ──→ capture candidate ──→ review
+CSV / XLS / XLSX ────────────→ reconciliation ─────────────────────→ review
                                          │
                                          ▼
 Compose UI ←── Flow / ViewModel ←── encrypted Room ledger

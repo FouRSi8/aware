@@ -1,0 +1,7 @@
+Synthetic test data only
+Transaction Date,Narration,Withdrawal,Deposit,Balance,UTR
+01/09/2026,Salary September,,65000.00,102500.00,SALARY0901
+02/09/2026,UPI SWIGGY DINNER,648.50,,101851.50,UTRTEST001
+03/09/2026,Metro card recharge,500.00,,101351.50,UTRTEST002
+04/09/2026,Book store refund,,899.00,102250.50,UTRTEST003
+05/09/2026,Self transfer to own account,2000.00,,100250.50,UTRTEST004

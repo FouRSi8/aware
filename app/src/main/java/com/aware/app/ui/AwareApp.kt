@@ -1,5 +1,6 @@
 package com.aware.app.ui
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -90,6 +91,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
@@ -135,6 +139,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -154,6 +159,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -162,6 +168,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -202,6 +209,10 @@ import com.aware.app.ui.theme.NeonOrange
 import com.aware.app.ui.theme.NeonGreen
 import com.aware.app.ui.theme.NeonRed
 import com.aware.app.ui.theme.readableAccent
+import com.aware.app.storage.StorageSnapshot
+import com.aware.app.storage.clearTemporaryStorage
+import com.aware.app.storage.formatStorageSize
+import com.aware.app.storage.readStorageSnapshot
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.compositeOver
 import java.time.Instant
@@ -212,6 +223,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class Tab(
     val label: String,
@@ -263,6 +277,7 @@ fun AwareApp(
     onRefreshWidget: () -> Unit,
     onAppLockChange: (Boolean) -> Unit,
     onExportCsv: () -> Unit,
+    onChooseStatement: () -> Unit,
     onCreateBackup: (String) -> Unit,
     onChooseRestore: () -> Unit,
     restoreReady: Boolean,
@@ -281,6 +296,7 @@ fun AwareApp(
     val aiSuggestion by viewModel.aiSuggestion.collectAsState()
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val smartNudgesEnabled by viewModel.smartNudgesEnabled.collectAsState()
+    val statementImport by viewModel.statementImport.collectAsState()
     var selected by remember { mutableStateOf(Tab.HOME) }
     var addType by remember { mutableStateOf<TransactionType?>(null) }
     var showBudget by remember { mutableStateOf(false) }
@@ -297,6 +313,7 @@ fun AwareApp(
     var showMonthlyReport by remember { mutableStateOf(false) }
     var showMoneyMoveChooser by remember { mutableStateOf(false) }
     var showOpenSourceNotice by remember { mutableStateOf(false) }
+    var showStorage by remember { mutableStateOf(false) }
     var showCategoryForIncome by remember { mutableStateOf<Boolean?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showSkin by remember { mutableStateOf(false) }
@@ -367,7 +384,8 @@ fun AwareApp(
                         viewModel.setAppLock(enabled)
                         onAppLockChange(enabled)
                     },
-                    { showAccountManager = true }, { showCategoryForIncome = it }, { showGroqKey = true }, { showBackupPassword = true }, onExportCsv, onChooseRestore,
+                    { showAccountManager = true }, { showCategoryForIncome = it }, { showGroqKey = true }, onChooseStatement,
+                    { showBackupPassword = true }, onExportCsv, onChooseRestore, { showStorage = true },
                     { showOpenSourceNotice = true }, appearance, { showAppearance = true },
                     skin, { showSkin = true }, cozyPalette, { showCozyPalette = true },
                     onCheckForUpdates, Modifier.padding(padding),
@@ -550,17 +568,38 @@ fun AwareApp(
             editingTransaction = null
         }
     }
-    showCategoryForIncome?.let { isIncome ->
-        CategoryDialog(isIncome, { showCategoryForIncome = null }) { name, emoji, color ->
-            viewModel.addCategory(name, emoji, color, isIncome)
-            showCategoryForIncome = null
-        }
-    }
     if (showGroqKey) GroqKeyDialog({ showGroqKey = false }) { viewModel.saveGroqKey(it); showGroqKey = false }
     if (showBackupPassword) PasswordDialog("Encrypt backup", "Use at least 8 characters. You will need this password to restore.", { showBackupPassword = false }) { onCreateBackup(it); showBackupPassword = false }
     if (showRestorePassword) PasswordDialog("Restore aware", "Enter the password used when this backup was created. Existing ledger data will be replaced.", { showRestorePassword = false }) { onRestore(it); showRestorePassword = false }
     if (showMonthlyReport) MonthlyReportDialog(state) { showMonthlyReport = false }
     if (showOpenSourceNotice) OpenSourceNoticeDialog { showOpenSourceNotice = false }
+    if (showStorage) StorageDialog { showStorage = false }
+    when (val currentImport = statementImport) {
+        StatementImportUiState.Idle -> Unit
+        is StatementImportUiState.Reading -> StatementReadingDialog(currentImport.fileName, viewModel::closeStatementImport)
+        is StatementImportUiState.NeedsPassword -> StatementPasswordDialog(
+            fileName = currentImport.fileName,
+            error = currentImport.error,
+            onDismiss = viewModel::closeStatementImport,
+            onUnlock = viewModel::unlockStatement,
+        )
+        is StatementImportUiState.PasswordForgotten -> PasswordDissolveOverlay(viewModel::finishPasswordAnimation)
+        is StatementImportUiState.Reviewing -> StatementReviewDialog(
+            review = currentImport.review,
+            state = state,
+            groqConfigured = groqConfigured,
+            onDismiss = viewModel::closeStatementImport,
+            onAccount = viewModel::setStatementAccount,
+            onToggle = viewModel::toggleStatementRow,
+            onSelectNew = viewModel::selectNewStatementRows,
+            onType = viewModel::setStatementType,
+            onCategory = viewModel::setStatementCategory,
+            onDestination = viewModel::setStatementDestination,
+            onGroq = viewModel::categoriseStatementWithGroq,
+            onAddCategory = { showCategoryForIncome = it },
+            onImport = viewModel::importReviewedStatement,
+        )
+    }
     review?.let { candidate ->
         CandidateReviewDialog(
             candidate = candidate,
@@ -577,6 +616,12 @@ fun AwareApp(
             onAddCategory = { showCategoryForIncome = it },
             onAddAccount = { showAccount = true },
         )
+    }
+    showCategoryForIncome?.let { isIncome ->
+        CategoryDialog(isIncome, { showCategoryForIncome = null }) { name, emoji, color ->
+            viewModel.addCategory(name, emoji, color, isIncome)
+            showCategoryForIncome = null
+        }
     }
     confirmation?.let { saved ->
         TransactionConfirmationOverlay(saved) { confirmation = null }
@@ -1861,9 +1906,11 @@ private fun SettingsScreen(
     onAddAccount: () -> Unit,
     onAddCategory: (Boolean) -> Unit,
     onAddGroqKey: () -> Unit,
+    onImportStatement: () -> Unit,
     onBackup: () -> Unit,
     onExportCsv: () -> Unit,
     onRestore: () -> Unit,
+    onStorage: () -> Unit,
     onOpenSourceNotices: () -> Unit,
     appearance: Appearance,
     onAppearance: () -> Unit,
@@ -1916,9 +1963,11 @@ private fun SettingsScreen(
         item { AwareSettingsSection("DATA") }
         item {
             AwareSettingsGroup {
+                AwareSettingsLink(Icons.Default.FileUpload, "Import bank statement", "CSV · XLS · XLSX", LocalTokens.current.accent, onImportStatement)
                 AwareSettingsLink(Icons.Default.FileDownload, "Export data", "CSV", LocalTokens.current.hero, onExportCsv)
                 AwareSettingsLink(Icons.Default.Shield, "Encrypted backup", "Create", LocalTokens.current.violet, onBackup)
                 AwareSettingsLink(Icons.Default.Restore, "Restore backup", "Choose file", LocalTokens.current.warn, onRestore)
+                AwareSettingsLink(Icons.Default.Storage, "Storage", "Encrypted ledger", LocalTokens.current.info, onStorage)
                 AwareSettingsLink(Icons.Default.Lightbulb, "Open-source notices", "GPL-3.0", LocalTokens.current.positive, onOpenSourceNotices)
             }
         }
@@ -2052,6 +2101,8 @@ private fun OpenSourceNoticeDialog(onDismiss: () -> Unit) {
         }
         Text("Manrope", style = MaterialTheme.typography.titleLarge)
         Text("The embedded geometric typeface is Manrope, distributed under the SIL Open Font License 1.1.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Apache POI", style = MaterialTheme.typography.titleLarge)
+        Text("Excel statement reading uses Apache POI 5.5.1 under the Apache License 2.0.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onBackground, contentColor = MaterialTheme.colorScheme.background)) { Text("Done") }
     }
 }
@@ -3128,6 +3179,353 @@ private fun CandidateReviewDialog(
 }
 
 @Composable
+private fun StatementReadingDialog(fileName: String, onDismiss: () -> Unit) {
+    AwareDialog("Reading statement", onDismiss) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 3.dp)
+            Column {
+                Text(fileName, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Finding columns and reconciling debits and credits on this device…", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatementPasswordDialog(
+    fileName: String,
+    error: String?,
+    onDismiss: () -> Unit,
+    onUnlock: (CharArray) -> Unit,
+) {
+    var password by remember(fileName) { mutableStateOf("") }
+    AwareDialog("Unlock statement", onDismiss) {
+        Text(fileName, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            "Enter the Excel password. It is used once in memory, never saved, and never sent to Groq.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Statement password") },
+            visualTransformation = PasswordVisualTransformation(),
+            colors = cozyFieldColors(),
+            singleLine = true,
+        )
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+        Button(
+            onClick = {
+                val oneUsePassword = password.toCharArray()
+                password = ""
+                onUnlock(oneUsePassword)
+            },
+            enabled = password.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+        ) { Text("Unlock locally") }
+    }
+}
+
+@Composable
+private fun PasswordDissolveOverlay(onFinished: () -> Unit) {
+    val context = LocalContext.current
+    val progress = remember { Animatable(0f) }
+    val ink = MaterialTheme.colorScheme.onBackground
+    val accent = LocalTokens.current.accent
+    LaunchedEffect(Unit) {
+        Toast.makeText(
+            context,
+            "Password used once and forgotten. It was never saved or sent anywhere.",
+            Toast.LENGTH_LONG,
+        ).show()
+        progress.animateTo(1f, tween(1_450, easing = FastOutSlowInEasing))
+        delay(220)
+        onFinished()
+    }
+    Dialog(onDismissRequest = {}, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        LightDialogSystemBars()
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Canvas(Modifier.fillMaxWidth().height(150.dp).semantics { contentDescription = "The one-use password dissolves after unlocking" }) {
+                    val centerY = size.height / 2f
+                    val spacing = 24.dp.toPx()
+                    val dotRadius = 6.dp.toPx()
+                    val startX = size.width / 2f - spacing * 3.5f
+                    repeat(8) { dot ->
+                        val delayFraction = dot * .045f
+                        val local = ((progress.value - delayFraction) / (1f - delayFraction)).coerceIn(0f, 1f)
+                        val baseX = startX + dot * spacing
+                        drawCircle(
+                            color = ink.copy(alpha = (1f - local).coerceAtLeast(0f)),
+                            radius = dotRadius * (1f - local * .28f),
+                            center = androidx.compose.ui.geometry.Offset(baseX + local * 34.dp.toPx(), centerY - local * (dot % 3 - 1) * 14.dp.toPx()),
+                        )
+                        repeat(5) { particle ->
+                            val particleProgress = ((local - .08f * particle) / .92f).coerceIn(0f, 1f)
+                            if (particleProgress > 0f) {
+                                val angle = (dot * 1.7f + particle * 1.19f)
+                                drawCircle(
+                                    color = accent.copy(alpha = (1f - particleProgress) * .75f),
+                                    radius = (2.4f - particle * .22f).dp.toPx(),
+                                    center = androidx.compose.ui.geometry.Offset(
+                                        baseX + particleProgress * (42 + particle * 7).dp.toPx(),
+                                        centerY + kotlin.math.sin(angle) * particleProgress * (22 + particle * 4).dp.toPx(),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+                Text("Password forgotten", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("Opening your private review…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatementReviewDialog(
+    review: StatementReview,
+    state: MainUiState,
+    groqConfigured: Boolean,
+    onDismiss: () -> Unit,
+    onAccount: (Long) -> Unit,
+    onToggle: (Int) -> Unit,
+    onSelectNew: () -> Unit,
+    onType: (Int, TransactionType) -> Unit,
+    onCategory: (Int, Long?) -> Unit,
+    onDestination: (Int, Long?) -> Unit,
+    onGroq: () -> Unit,
+    onAddCategory: (Boolean) -> Unit,
+    onImport: () -> Unit,
+) {
+    val selectedCount = review.rows.count(StatementReviewRow::selected)
+    val duplicateCount = review.rows.count { it.duplicateReason != null }
+    val unresolvedCount = review.rows.count { !it.source.directionVerified }
+    val transferMissing = review.rows.any {
+        it.selected && it.type == TransactionType.TRANSFER && (it.destinationAccountId == null || it.destinationAccountId == review.accountId)
+    }
+    val canImport = selectedCount > 0 && review.accountId > 0 && !transferMissing && !review.aiBusy
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        LightDialogSystemBars()
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(Modifier.size(38.dp).clickable(onClick = onDismiss), CircleShape, MaterialTheme.colorScheme.surfaceVariant) {
+                        Icon(Icons.Default.Close, "Close", Modifier.padding(10.dp))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Review statement", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(review.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    }
+                    Text("$selectedCount/${review.rows.size}", fontWeight = FontWeight.Black, color = LocalTokens.current.accent)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                LazyColumn(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item {
+                        Panel(Modifier.fillMaxWidth()) {
+                            MachineLabel("local reconciliation // review required")
+                            Spacer(Modifier.height(8.dp))
+                            Text("${review.rows.size} transactions found", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                            val checks = when {
+                                review.balanceChecks == 0 -> "Debit/credit columns supplied direction"
+                                else -> "${review.balancedMatches}/${review.balanceChecks} ambiguous rows matched the running balance"
+                            }
+                            Text(checks, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            if (duplicateCount > 0 || unresolvedCount > 0 || review.skippedRows > 0) {
+                                Text(
+                                    listOfNotNull(
+                                        duplicateCount.takeIf { it > 0 }?.let { "$it likely duplicate" },
+                                        unresolvedCount.takeIf { it > 0 }?.let { "$it need direction" },
+                                        review.skippedRows.takeIf { it > 0 }?.let { "$it non-transaction rows skipped" },
+                                    ).joinToString(" · "),
+                                    color = LocalTokens.current.warn,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Label("Statement account")
+                        Spacer(Modifier.height(6.dp))
+                        ScrollChoices(state.accounts, review.accountId, { it.id }, { it.name }) { onAccount(it.id) }
+                    }
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = onSelectNew, modifier = Modifier.weight(1f)) { Text("Select safe rows") }
+                            OutlinedButton(onClick = onGroq, enabled = groqConfigured && !review.aiBusy, modifier = Modifier.weight(1f)) {
+                                if (review.aiBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                else Icon(Icons.Default.AutoAwesome, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (groqConfigured) "Suggest categories" else "Groq off", maxLines = 1)
+                            }
+                        }
+                        Text(
+                            "Only redacted merchant words and your category names leave the device when you tap Groq.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 10.sp,
+                        )
+                    }
+                    items(review.rows, key = { it.source.rowNumber }) { row ->
+                        StatementReviewRowCard(
+                            row = row,
+                            sourceAccountId = review.accountId,
+                            accounts = state.accounts,
+                            categories = state.categories,
+                            onToggle = { onToggle(row.source.rowNumber) },
+                            onType = { onType(row.source.rowNumber, it) },
+                            onCategory = { onCategory(row.source.rowNumber, it) },
+                            onDestination = { onDestination(row.source.rowNumber, it) },
+                            onAddCategory = onAddCategory,
+                        )
+                    }
+                }
+                Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        if (transferMissing) Text("Choose a receiving account for each selected transfer.", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                        Button(
+                            onClick = onImport,
+                            enabled = canImport,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+                        ) { Text("Add $selectedCount reviewed ${if (selectedCount == 1) "transaction" else "transactions"}") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatementReviewRowCard(
+    row: StatementReviewRow,
+    sourceAccountId: Long,
+    accounts: List<AccountEntity>,
+    categories: List<CategoryEntity>,
+    onToggle: () -> Unit,
+    onType: (TransactionType) -> Unit,
+    onCategory: (Long?) -> Unit,
+    onDestination: (Long?) -> Unit,
+    onAddCategory: (Boolean) -> Unit,
+) {
+    val income = row.type == TransactionType.INCOME || row.type == TransactionType.REFUND
+    val rowCategories = categories.filter { it.isIncome == income }
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = awareShape(14.dp),
+        color = if (row.selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .62f),
+        border = BorderStroke(1.dp, if (row.duplicateReason != null) LocalTokens.current.warn.copy(alpha = .7f) else MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(row.selected, { onToggle() })
+                Column(Modifier.weight(1f)) {
+                    Text(row.source.merchant, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        IMPORT_DATE_FORMAT.format(Instant.ofEpochMilli(row.source.occurredAt).atZone(ZoneId.systemDefault())),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                    )
+                }
+                Text(money(row.source.amountPaise), fontWeight = FontWeight.Black, color = if (income) LocalTokens.current.positive else MaterialTheme.colorScheme.onSurface)
+            }
+            row.duplicateReason?.let { Text(it + " · leave unchecked unless this is separate", color = LocalTokens.current.warn, fontSize = 11.sp) }
+            row.source.warning?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+            ChoiceRow(
+                listOf(TransactionType.EXPENSE, TransactionType.INCOME, TransactionType.REFUND, TransactionType.TRANSFER),
+                row.type,
+                label = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+                onSelected = onType,
+            )
+            if (row.type == TransactionType.TRANSFER) {
+                Label("Receiving account")
+                ScrollChoices(accounts.filter { it.id != sourceAccountId }, row.destinationAccountId, { it.id }, { it.name }) { onDestination(it.id) }
+            } else {
+                Label("Category")
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    FilterPill("Uncategorised", row.categoryId == null) { onCategory(null) }
+                    rowCategories.forEach { category ->
+                        FilterPill("${category.emoji} ${category.name}", row.categoryId == category.id) { onCategory(category.id) }
+                    }
+                    FilterPill("＋ New", false) { onAddCategory(income) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StorageDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var snapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
+    suspend fun refresh() {
+        snapshot = withContext(Dispatchers.IO) { readStorageSnapshot(context) }
+    }
+    LaunchedEffect(Unit) { refresh() }
+    AwareDialog("Storage", onDismiss) {
+        Text(
+            "Transactions use a compact encrypted database. It grows with your ledger, but the original statement file and its password are never copied into aware.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Panel(Modifier.fillMaxWidth()) {
+            StorageMetric("Encrypted ledger", snapshot?.ledgerBytes)
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            StorageMetric("Temporary files", snapshot?.temporaryBytes)
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            StorageMetric("Total app data shown here", snapshot?.totalBytes)
+        }
+        Text(
+            "Android may report a little more for the app binary and system-managed files. Backups and exported CSV files live wherever you chose to save them.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 11.sp,
+        )
+        OutlinedButton(
+            onClick = {
+                scope.launch {
+                    val cleared = withContext(Dispatchers.IO) { clearTemporaryStorage(context) }
+                    refresh()
+                    Toast.makeText(context, "Cleared ${formatStorageSize(cleared)} of temporary files", Toast.LENGTH_SHORT).show()
+                }
+            },
+            enabled = (snapshot?.temporaryBytes ?: 0L) > 0,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Clear temporary files") }
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Done") }
+    }
+}
+
+@Composable
+private fun StorageMetric(label: String, bytes: Long?) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        Text(bytes?.let(::formatStorageSize) ?: "…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 private fun GroqKeyDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var key by remember { mutableStateOf("") }
     AwareDialog("Connect Groq", onDismiss) {
@@ -3284,6 +3682,7 @@ private fun formatTime(epochMillis: Long): String =
     TIME_FORMAT.format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()))
 
 private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+private val IMPORT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
 
 private fun signedMoney(paise: Long, signed: Boolean): String =
     (if (signed && paise > 0) "+" else if (paise < 0) "−" else "") + money(kotlin.math.abs(paise))

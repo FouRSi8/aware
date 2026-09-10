@@ -150,6 +150,14 @@ class AwareRepository(
     }
 
     suspend fun addTransaction(item: TransactionEntity): Long = database.transactionDao().insert(item)
+    suspend fun importTransactions(items: List<TransactionEntity>): ImportResult = database.withTransaction {
+        var added = 0
+        var duplicates = 0
+        items.forEach { item ->
+            if (database.transactionDao().insert(item) > 0) added++ else duplicates++
+        }
+        ImportResult(added, duplicates)
+    }
     suspend fun updateTransaction(item: TransactionEntity) = database.transactionDao().update(item)
     suspend fun deleteTransaction(id: Long) {
         database.transactionDao().byId(id)?.let { database.transactionDao().delete(it) }
@@ -275,6 +283,8 @@ class AwareRepository(
             database.merchantRuleDao().restoreAll(payload.merchantRules)
         }
     }
+
+    data class ImportResult(val added: Int, val duplicates: Int)
 
     data class BudgetAlert(val budgetId: Long, val monthKey: String, val name: String, val percent: Int, val spentPaise: Long, val capPaise: Long)
 

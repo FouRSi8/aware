@@ -6,6 +6,7 @@ import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
+import android.provider.OpenableColumns
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,6 +53,8 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.widget.Toast
 import androidx.glance.appwidget.updateAll
 import android.os.Build
@@ -59,6 +62,8 @@ import com.aware.app.update.AppRelease
 import com.aware.app.update.AppUpdater
 import com.aware.app.update.UpdateCheckResult
 import com.aware.app.update.UpdateCheckWorker
+import com.aware.app.statement.StatementImportParser
+import java.io.ByteArrayOutputStream
 
 class MainActivity : FragmentActivity() {
     private var unlocked by mutableStateOf(false)
@@ -137,6 +142,36 @@ class MainActivity : FragmentActivity() {
             }
             val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 restoreBytes = uri?.let { contentResolver.openInputStream(it)?.use { input -> input.readBytes() } }
+            }
+            val statementLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            val name = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                                if (cursor.moveToFirst()) cursor.getString(0) else null
+                            } ?: uri.lastPathSegment ?: "statement.xlsx"
+                            val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(16 * 1024)
+                                var total = 0
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    total += read
+                                    require(total <= StatementImportParser.MAX_FILE_BYTES) { "Statement files must be 15 MB or smaller" }
+                                    output.write(buffer, 0, read)
+                                }
+                                buffer.fill(0)
+                                output.toByteArray()
+                            } ?: error("Couldn’t open that statement")
+                            name to bytes
+                        }
+                    }.onSuccess { (name, bytes) ->
+                        viewModel.openStatement(name, bytes)
+                    }.onFailure { error ->
+                        Toast.makeText(this@MainActivity, error.message ?: "Couldn’t open that statement", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
             val appearancePrefs = remember { getSharedPreferences("appearance", MODE_PRIVATE) }
             // Falls back to the pre-key preference so an upgrade keeps the look
@@ -247,6 +282,19 @@ class MainActivity : FragmentActivity() {
                             csvBytes = app.container.repository.createCsv().toByteArray()
                             csvLauncher.launch("aware-transactions.csv")
                         }
+                    },
+                    onChooseStatement = {
+                        statementLauncher.launch(
+                            arrayOf(
+                                "text/csv",
+                                "text/comma-separated-values",
+                                "text/plain",
+                                "application/csv",
+                                "application/vnd.ms-excel",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "application/octet-stream",
+                            ),
+                        )
                     },
                     onCreateBackup = { password ->
                         scope.launch {

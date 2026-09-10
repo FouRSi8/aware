@@ -20,6 +20,19 @@ every detected payment remains a pending candidate until the user reviews and
 approves it. Notification content is encrypted while pending, cleared after review,
 and never added directly to the ledger.
 
+## Bank statement import
+
+CSV, XLS, and XLSX statements are opened through Android's document picker and
+parsed locally. The source file is not copied into aware. Its in-memory byte buffer
+is cleared after parsing or cancellation. If a workbook is password protected, the
+password is used only to unlock that file, cleared from the active UI and parser
+memory immediately after the unlock attempt, and never persisted or sent over the
+network.
+
+Parsed rows remain in a temporary review screen. Likely duplicates and rows whose
+direction cannot be verified start unchecked. Nothing is written to the encrypted
+ledger until the user selects and confirms the rows.
+
 ## Storage and export
 
 The Room database is encrypted with SQLCipher using a random passphrase protected
@@ -31,7 +44,8 @@ intentionally unencrypted and is clearly labelled before export.
 AI is optional and never determines amount or debit/credit direction. When a
 user supplies a Groq key, aware may send redacted merchant context and category
 choices. It does not send raw SMS, account numbers, UPI IDs, phone numbers,
-transaction references, or balances.
+transaction references, balances, statement files, or statement passwords. Groq
+never determines an imported amount or whether it is a debit or credit.
 
 ## App updates
 
