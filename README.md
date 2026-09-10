@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.4.0" src="https://img.shields.io/badge/latest-v1.4.0-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.4.1" src="https://img.shields.io/badge/latest-v1.4.1-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -39,9 +39,10 @@
 
 <p align="center">
   <img src="docs/media/statement-import.png" alt="aware bank statement review" width="31%" />
+  &nbsp; <img src="docs/media/category-manager.png" alt="aware expense category manager" width="31%" />
 </p>
 
-<p align="center"><sub>Review every statement row before it reaches your ledger</sub></p>
+<p align="center"><sub>Review-first statement import · Dedicated category managers</sub></p>
 
 ## Your money, without the surveillance
 
@@ -91,9 +92,10 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest version available: v1.4.0.** The newest source is always on
+> **Latest version available: v1.4.1.** The newest source is always on
 > [`main`](https://github.com/FouRSi8/aware/tree/main). This release adds private,
-> review-first bank-statement import and local storage housekeeping.
+> review-first bank-statement import, dedicated category managers, and local
+> storage housekeeping.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps and SMS permission;

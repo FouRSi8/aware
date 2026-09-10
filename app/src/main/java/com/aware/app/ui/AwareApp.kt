@@ -52,7 +52,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -315,6 +317,8 @@ fun AwareApp(
     var showOpenSourceNotice by remember { mutableStateOf(false) }
     var showStorage by remember { mutableStateOf(false) }
     var showCategoryForIncome by remember { mutableStateOf<Boolean?>(null) }
+    var categoryManagerIncome by remember { mutableStateOf<Boolean?>(null) }
+    var categoryCreatedCallback by remember { mutableStateOf<((Long) -> Unit)?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showSkin by remember { mutableStateOf(false) }
     var showCozyPalette by remember { mutableStateOf(false) }
@@ -384,7 +388,7 @@ fun AwareApp(
                         viewModel.setAppLock(enabled)
                         onAppLockChange(enabled)
                     },
-                    { showAccountManager = true }, { showCategoryForIncome = it }, { showGroqKey = true }, onChooseStatement,
+                    { showAccountManager = true }, { categoryManagerIncome = it }, { showGroqKey = true }, onChooseStatement,
                     { showBackupPassword = true }, onExportCsv, onChooseRestore, { showStorage = true },
                     { showOpenSourceNotice = true }, appearance, { showAppearance = true },
                     skin, { showSkin = true }, cozyPalette, { showCozyPalette = true },
@@ -448,7 +452,10 @@ fun AwareApp(
     addType?.let { initialType -> AddTransactionDialog(
         state, initialType,
         onDismiss = { addType = null },
-        onAddCategory = { showCategoryForIncome = it },
+        onAddCategory = { isIncome, onCreated ->
+            categoryCreatedCallback = onCreated
+            showCategoryForIncome = isIncome
+        },
         onAddAccount = { showAccount = true },
     ) { amount, merchant, type, account, destination, category, note, tags, occurredAt ->
         viewModel.addManual(amount, merchant, type, account, destination, category, note, tags, occurredAt)
@@ -468,6 +475,17 @@ fun AwareApp(
         onAdd = { editingAccount = AccountEntity(name = "", kind = AccountKind.BANK) },
         onEdit = { editingAccount = it },
     )
+    categoryManagerIncome?.let { isIncome ->
+        CategoryManagerDialog(
+            isIncome = isIncome,
+            categories = state.categories.filter { it.isIncome == isIncome },
+            onDismiss = { categoryManagerIncome = null },
+            onAdd = {
+                categoryCreatedCallback = null
+                showCategoryForIncome = isIncome
+            },
+        )
+    }
     editingAccount?.let { account ->
         AccountEditorDialog(
             account = account.takeIf { it.id != 0L },
@@ -561,7 +579,10 @@ fun AwareApp(
             initialType = transaction.type,
             transaction = transaction,
             onDismiss = { editingTransaction = null },
-            onAddCategory = { showCategoryForIncome = it },
+            onAddCategory = { isIncome, onCreated ->
+                categoryCreatedCallback = onCreated
+                showCategoryForIncome = isIncome
+            },
             onAddAccount = { showAccount = true },
         ) { amount, merchant, type, account, destination, category, note, tags, occurredAt ->
             viewModel.updateTransaction(transaction, amount, merchant, type, account, destination, category, note, tags, occurredAt)
@@ -618,9 +639,15 @@ fun AwareApp(
         )
     }
     showCategoryForIncome?.let { isIncome ->
-        CategoryDialog(isIncome, { showCategoryForIncome = null }) { name, emoji, color ->
-            viewModel.addCategory(name, emoji, color, isIncome)
+        CategoryDialog(isIncome, {
+            categoryCreatedCallback = null
             showCategoryForIncome = null
+        }) { name, emoji, color ->
+            viewModel.addCategory(name, emoji, color, isIncome) { id ->
+                categoryCreatedCallback?.invoke(id)
+                categoryCreatedCallback = null
+                showCategoryForIncome = null
+            }
         }
     }
     confirmation?.let { saved ->
@@ -1904,7 +1931,7 @@ private fun SettingsScreen(
     onToggleNudges: () -> Unit,
     onToggleAppLock: () -> Unit,
     onAddAccount: () -> Unit,
-    onAddCategory: (Boolean) -> Unit,
+    onOpenCategoryManager: (Boolean) -> Unit,
     onAddGroqKey: () -> Unit,
     onImportStatement: () -> Unit,
     onBackup: () -> Unit,
@@ -1944,8 +1971,20 @@ private fun SettingsScreen(
         item {
             AwareSettingsGroup {
                 AwareSettingsLink(Icons.Default.AccountBalanceWallet, "Accounts & wallets", "${state.accounts.size} saved", LocalTokens.current.hero, onAddAccount)
-                AwareSettingsLink(Icons.Default.ShoppingBag, "New spending category", "Custom", LocalTokens.current.warn) { onAddCategory(false) }
-                AwareSettingsLink(Icons.Default.Savings, "New income category", "Custom", LocalTokens.current.positive) { onAddCategory(true) }
+                val expenseCategories = state.categories.count { !it.isIncome }
+                val incomeCategories = state.categories.count { it.isIncome }
+                AwareSettingsLink(
+                    Icons.Default.ShoppingBag,
+                    "Expense categories",
+                    "$expenseCategories saved",
+                    LocalTokens.current.warn,
+                ) { onOpenCategoryManager(false) }
+                AwareSettingsLink(
+                    Icons.Default.Savings,
+                    "Income categories",
+                    "$incomeCategories saved",
+                    LocalTokens.current.positive,
+                ) { onOpenCategoryManager(true) }
                 AwareSettingsValue(Icons.Default.CurrencyRupee, "Currency", "Indian rupee", LocalTokens.current.warn)
                 AwareSettingsToggle(Icons.Default.Notifications, "Budget nudges", smartNudgesEnabled, LocalTokens.current.negative, onToggleNudges)
                 AwareSettingsToggle(Icons.Default.Lock, "Unlock with biometrics", appLockEnabled, LocalTokens.current.info, onToggleAppLock)
@@ -2487,7 +2526,7 @@ private fun AddTransactionDialog(
     initialType: TransactionType,
     transaction: TransactionEntity? = null,
     onDismiss: () -> Unit,
-    onAddCategory: (Boolean) -> Unit,
+    onAddCategory: (Boolean, (Long) -> Unit) -> Unit,
     onAddAccount: () -> Unit,
     onSave: (Long, String, TransactionType, Long, Long?, Long?, String, String, Long) -> Unit,
 ) {
@@ -2585,7 +2624,11 @@ private fun AddTransactionDialog(
                     val available = state.categories.filter { if (type == TransactionType.INCOME || type == TransactionType.REFUND) it.isIncome else !it.isIncome }
                     AwareCategoryPicker(
                         available, categoryId,
-                        onAdd = { onAddCategory(type == TransactionType.INCOME || type == TransactionType.REFUND) },
+                        onAdd = {
+                            onAddCategory(type == TransactionType.INCOME || type == TransactionType.REFUND) { createdId ->
+                                categoryId = createdId
+                            }
+                        },
                     ) { categoryId = it }
                     Spacer(Modifier.height(13.dp))
                 }
@@ -2636,8 +2679,17 @@ private fun AddTransactionDialog(
 @Composable
 private fun AwareCategoryPicker(categories: List<CategoryEntity>, selectedId: Long?, onAdd: (() -> Unit)? = null, onSelected: (Long) -> Unit) {
     val t = LocalTokens.current
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        categories.forEach { category ->
+    val listState = rememberLazyListState()
+    LaunchedEffect(selectedId, categories.map(CategoryEntity::id)) {
+        val selectedIndex = categories.indexOfFirst { it.id == selectedId }
+        if (selectedIndex >= 0) listState.animateScrollToItem(selectedIndex)
+    }
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(categories, key = CategoryEntity::id) { category ->
             val selected = selectedId == category.id
             val color = Color(category.colorArgb)
             // Maximal follows the reference: outlined chip, category colour in
@@ -2666,18 +2718,20 @@ private fun AwareCategoryPicker(categories: List<CategoryEntity>, selectedId: Lo
                 )
             }
         }
-        onAdd?.let {
-            Surface(
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = it),
-                shape = awareShape(10.dp), color = t.accent,
-            ) {
-                Text(
-                    if (t.maximal) "+ NEW" else "＋ New",
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = t.onAccent,
-                    style = if (t.maximal) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                )
+        onAdd?.let { add ->
+            item(key = "add-category") {
+                Surface(
+                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = add),
+                    shape = awareShape(10.dp), color = t.accent,
+                ) {
+                    Text(
+                        if (t.maximal) "+ NEW" else "＋ New",
+                        Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        color = t.onAccent,
+                        style = if (t.maximal) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
     }
@@ -3030,6 +3084,71 @@ private fun AccountEditorDialog(
             ),
         ) {
             Text(if (account == null) "Add source" else "Save changes")
+        }
+    }
+}
+
+@Composable
+private fun CategoryManagerDialog(
+    isIncome: Boolean,
+    categories: List<CategoryEntity>,
+    onDismiss: () -> Unit,
+    onAdd: () -> Unit,
+) {
+    val kind = if (isIncome) "income" else "expense"
+    AwareDialog(if (isIncome) "Income categories" else "Expense categories", onDismiss) {
+        Text(
+            "View every active $kind category here. New categories become available throughout aware immediately.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        MachineLabel("${categories.size} ${if (categories.size == 1) "category" else "categories"} // $kind")
+        Button(
+            onClick = onAdd,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LocalTokens.current.accent,
+                contentColor = LocalTokens.current.onAccent,
+            ),
+        ) {
+            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("Add ${if (isIncome) "income" else "expense"} category", fontWeight = FontWeight.Bold)
+        }
+        if (categories.isEmpty()) {
+            Panel(Modifier.fillMaxWidth()) {
+                Text("No $kind categories yet", fontWeight = FontWeight.Bold)
+                Text("Create your first one below.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            categories.forEach { category ->
+                val categoryColor = Color(category.colorArgb)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = awareShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier.size(42.dp).clip(awareShape(13.dp)).background(categoryColor.copy(alpha = .25f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(category.emoji, fontSize = 20.sp) }
+                        Spacer(Modifier.width(13.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(category.name, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (isIncome) "Available for income and refunds" else "Available for expenses",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                            )
+                        }
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(categoryColor))
+                    }
+                }
+            }
         }
     }
 }

@@ -412,8 +412,34 @@ class MainViewModel(
         )
     }
 
-    fun addCategory(name: String, emoji: String, colorArgb: Long, isIncome: Boolean) = launchMutation("Couldn’t add the category", "Category added") {
-        repository.addCategory(CategoryEntity(name = name.trim(), emoji = emoji.ifBlank { "✨" }, colorArgb = colorArgb, isIncome = isIncome))
+    fun addCategory(
+        name: String,
+        emoji: String,
+        colorArgb: Long,
+        isIncome: Boolean,
+        onAdded: (Long) -> Unit = {},
+    ) = viewModelScope.launch {
+        runCatching {
+            repository.addCategory(
+                CategoryEntity(
+                    name = name.trim(),
+                    emoji = emoji.ifBlank { "✨" },
+                    colorArgb = colorArgb,
+                    isIncome = isIncome,
+                ),
+            )
+        }.onSuccess { id ->
+            onAdded(id)
+            messageEvents.emit("Category added")
+        }.onFailure { error ->
+            val detail = error.message
+                ?.takeIf { it.isNotBlank() && !it.contains("SQL", ignoreCase = true) }
+                ?.take(100)
+            messageEvents.emit(
+                if (detail == null) "Couldn’t add the category. Please try again."
+                else "Couldn’t add the category: $detail",
+            )
+        }
     }
 
     fun addRecurring(name: String, amountPaise: Long, type: TransactionType, accountId: Long, categoryId: Long?, cadence: RecurrenceCadence, customIntervalDays: Int, startAt: Long, endAt: Long?, reminderMinutesBefore: Int) = launchMutation("Couldn’t add the recurring item", "Recurring item added") {
