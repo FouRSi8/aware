@@ -21,6 +21,10 @@ class AwareRepository(
     val transactions = database.transactionDao().observeAll()
     val pending = database.captureDao().observePending()
     val recurring = database.recurringDao().observeActive()
+    val savingsGoals = database.savingsGoalDao().observeActive()
+
+    fun monthlyPlan(month: YearMonth = YearMonth.now()): Flow<MonthlyPlanEntity?> =
+        database.monthlyPlanDao().observe(month.toString())
 
     fun budgets(month: YearMonth = YearMonth.now()): Flow<List<BudgetBucketEntity>> =
         database.budgetDao().observeActive(month.toString(), System.currentTimeMillis())
@@ -29,16 +33,25 @@ class AwareRepository(
         val zone = ZoneId.systemDefault()
         val from = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val to = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return combine(database.transactionDao().observeRange(from, to), pending) { items, candidates ->
-            val income = items.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise }
-            val refunds = items.filter { it.type == TransactionType.REFUND }.sumOf { it.amountPaise }
-            val spending = items.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountPaise }
-            DashboardSummary(
-                incomePaise = income,
-                otherIncomePaise = refunds,
-                spendingPaise = spending,
-                savingsPaise = income + refunds - spending,
+        return combine(
+            database.transactionDao().observeRange(from, to), pending, categories, monthlyPlan(month), accounts, transactions,
+        ) { values ->
+            @Suppress("UNCHECKED_CAST")
+            val items = values[0] as List<TransactionEntity>
+            val candidates = values[1] as List<CaptureCandidateEntity>
+            val currentCategories = values[2] as List<CategoryEntity>
+            val plan = values[3] as MonthlyPlanEntity?
+            val currentAccounts = values[4] as List<AccountEntity>
+            val allTransactions = values[5] as List<TransactionEntity>
+            val today = java.time.LocalDate.now(zone)
+            MonthlyFinanceCalculator.calculate(
+                monthTransactions = items,
+                allTransactions = allTransactions,
+                categories = currentCategories,
+                accounts = currentAccounts,
+                plan = plan,
                 pendingCount = candidates.size,
+                daysRemaining = month.lengthOfMonth() - today.dayOfMonth + 1,
             )
         }
     }
@@ -50,15 +63,15 @@ class AwareRepository(
         }
         val defaults = listOf(
             // aware's balanced ledger palette: distinct at a glance in both appearances.
-            CategoryEntity(name = "Food delivery", emoji = "🛵", colorArgb = 0xFFD97762L),
-            CategoryEntity(name = "Groceries", emoji = "🛒", colorArgb = 0xFF7B9E87L),
-            CategoryEntity(name = "Dining", emoji = "🍜", colorArgb = 0xFFD9A441L),
-            CategoryEntity(name = "Travel", emoji = "🚇", colorArgb = 0xFF6E8FB3L),
-            CategoryEntity(name = "Family", emoji = "💜", colorArgb = 0xFFA67C91L),
+            CategoryEntity(name = "Food delivery", emoji = "🛵", colorArgb = 0xFFD97762L, expenseNature = ExpenseNature.DISCRETIONARY),
+            CategoryEntity(name = "Groceries", emoji = "🛒", colorArgb = 0xFF7B9E87L, expenseNature = ExpenseNature.ESSENTIAL),
+            CategoryEntity(name = "Dining", emoji = "🍜", colorArgb = 0xFFD9A441L, expenseNature = ExpenseNature.DISCRETIONARY),
+            CategoryEntity(name = "Travel", emoji = "🚇", colorArgb = 0xFF6E8FB3L, expenseNature = ExpenseNature.ESSENTIAL),
+            CategoryEntity(name = "Family", emoji = "💜", colorArgb = 0xFFA67C91L, expenseNature = ExpenseNature.COMMITMENT),
             CategoryEntity(name = "Shopping", emoji = "🛍️", colorArgb = 0xFFC97B84L),
-            CategoryEntity(name = "Subscriptions", emoji = "🔁", colorArgb = 0xFF7C74A8L),
-            CategoryEntity(name = "Health", emoji = "💊", colorArgb = 0xFF82A39AL),
-            CategoryEntity(name = "Education", emoji = "🎓", colorArgb = 0xFF8796C7L),
+            CategoryEntity(name = "Subscriptions", emoji = "🔁", colorArgb = 0xFF7C74A8L, expenseNature = ExpenseNature.COMMITMENT),
+            CategoryEntity(name = "Health", emoji = "💊", colorArgb = 0xFF82A39AL, expenseNature = ExpenseNature.ESSENTIAL),
+            CategoryEntity(name = "Education", emoji = "🎓", colorArgb = 0xFF8796C7L, expenseNature = ExpenseNature.ONE_TIME),
             CategoryEntity(name = "Flexible", emoji = "✨", colorArgb = 0xFFC8A96BL),
             CategoryEntity(name = "Salary", emoji = "💸", colorArgb = 0xFF3E8E6AL, isIncome = true),
             CategoryEntity(name = "Other income", emoji = "➕", colorArgb = 0xFF5D94B8L, isIncome = true),
@@ -91,6 +104,7 @@ class AwareRepository(
         categoryId: Long? = null,
         accountId: Long? = null,
         destinationAccountId: Long? = null,
+        incomeKind: IncomeKind? = null,
         learnRule: Boolean = false,
     ): Long = database.withTransaction {
         val candidate = database.captureDao().byId(id) ?: return@withTransaction -1L
@@ -122,6 +136,8 @@ class AwareRepository(
                 merchant = finalMerchant,
                 occurredAt = candidate.receivedAt,
                 sourceFingerprint = candidate.fingerprint,
+                incomeKind = incomeKind.takeIf { finalType == TransactionType.INCOME }
+                    ?: inferIncomeKind(finalMerchant, finalType),
             )
         val transactionId = if (nearExpected != null) {
             database.transactionDao().update(newTransaction.copy(id = nearExpected.id, createdAt = nearExpected.createdAt))
@@ -189,7 +205,19 @@ class AwareRepository(
         }
     }
     suspend fun addBudget(item: BudgetBucketEntity) = database.budgetDao().upsert(item)
+    suspend fun deleteBudget(item: BudgetBucketEntity) = database.budgetDao().delete(item)
     suspend fun addRecurring(item: RecurringRuleEntity) = database.recurringDao().insert(item)
+    suspend fun saveRecurring(item: RecurringRuleEntity) = if (item.id == 0L) database.recurringDao().insert(item) else database.recurringDao().update(item)
+    suspend fun deleteRecurring(item: RecurringRuleEntity) = database.recurringDao().delete(item)
+    suspend fun saveMonthlyPlan(item: MonthlyPlanEntity) = database.monthlyPlanDao().upsert(item)
+    suspend fun saveSavingsGoal(item: SavingsGoalEntity) = database.savingsGoalDao().upsert(item)
+    suspend fun deleteSavingsGoal(item: SavingsGoalEntity) = database.savingsGoalDao().delete(item)
+
+    private fun inferIncomeKind(merchant: String, type: TransactionType): IncomeKind? = when {
+        type != TransactionType.INCOME -> null
+        listOf("salary", "payroll", "wages").any { merchant.contains(it, ignoreCase = true) } -> IncomeKind.SALARY
+        else -> null
+    }
     suspend fun latestPending() = database.captureDao().latestPending()
     suspend fun candidate(id: Long) = database.captureDao().byId(id)
     fun decryptCandidateBody(candidate: CaptureCandidateEntity) = secureStore.decrypt(candidate.encryptedBody)
@@ -263,6 +291,8 @@ class AwareRepository(
             budgets = database.budgetDao().allOnce(),
             recurring = database.recurringDao().allOnce(),
             merchantRules = database.merchantRuleDao().allOnce(),
+            monthlyPlans = database.monthlyPlanDao().allOnce(),
+            savingsGoals = database.savingsGoalDao().allOnce(),
         ),
         password,
     )
@@ -283,12 +313,16 @@ class AwareRepository(
             database.transactionDao().clear()
             database.categoryDao().clear()
             database.accountDao().clear()
+            database.monthlyPlanDao().clear()
+            database.savingsGoalDao().clear()
             database.accountDao().restoreAll(payload.accounts)
             database.categoryDao().restoreAll(payload.categories)
             database.transactionDao().restoreAll(payload.transactions)
             database.budgetDao().restoreAll(payload.budgets)
             database.recurringDao().restoreAll(payload.recurring)
             database.merchantRuleDao().restoreAll(payload.merchantRules)
+            database.monthlyPlanDao().restoreAll(payload.monthlyPlans)
+            database.savingsGoalDao().restoreAll(payload.savingsGoals)
         }
     }
 
@@ -316,13 +350,18 @@ class AwareRepository(
             }
             val from = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
             val to = endDate.atStartOfDay(zone).toInstant().toEpochMilli()
-            val spent = database.transactionDao().expenseTotalScoped(
-                from,
-                to,
-                budget.categoryId.takeIf { budget.scope == BudgetScope.CATEGORY },
-                budget.accountId.takeIf { budget.scope == BudgetScope.ACCOUNT },
-                budget.payee.takeIf { budget.scope == BudgetScope.PAYEE },
-            )
+            val range = database.transactionDao().rangeOnce(from, to)
+            val expenses = range.filter { transaction ->
+                transaction.type == TransactionType.EXPENSE && when (budget.scope) {
+                    BudgetScope.OVERALL -> true
+                    BudgetScope.CATEGORY -> budget.categoryId == null || transaction.categoryId == budget.categoryId
+                    BudgetScope.ACCOUNT -> budget.accountId == null || transaction.accountId == budget.accountId
+                    BudgetScope.PAYEE -> budget.payee.isNullOrBlank() || transaction.merchant.equals(budget.payee, ignoreCase = true)
+                }
+            }
+            val expenseIds = expenses.mapTo(mutableSetOf()) { it.id }
+            val refunds = range.filter { it.type == TransactionType.REFUND && it.linkedTransactionId in expenseIds }.sumOf { it.amountPaise }
+            val spent = (expenses.sumOf { it.amountPaise } - refunds).coerceAtLeast(0)
             val ratio = spent.toDouble() / budget.capPaise
             val threshold = when {
                 ratio >= 1.0 && budget.alert100 -> 100

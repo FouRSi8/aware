@@ -26,26 +26,26 @@ interface AccountDao {
 @Dao
 abstract class CategoryDao {
     @Query(
-        """SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived FROM expense_categories WHERE isArchived = 0
+        """SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived, expenseNature FROM expense_categories WHERE isArchived = 0
            UNION ALL
-           SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived FROM income_categories WHERE isArchived = 0
+           SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived, 'DISCRETIONARY' AS expenseNature FROM income_categories WHERE isArchived = 0
            ORDER BY isIncome, name""",
     )
     abstract fun observeAll(): Flow<List<CategoryEntity>>
 
-    @Query("SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived FROM expense_categories WHERE lower(name) = lower(:name) LIMIT 1")
+    @Query("SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived, expenseNature FROM expense_categories WHERE lower(name) = lower(:name) LIMIT 1")
     protected abstract suspend fun expenseByName(name: String): CategoryEntity?
 
-    @Query("SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived FROM income_categories WHERE lower(name) = lower(:name) LIMIT 1")
+    @Query("SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived, 'DISCRETIONARY' AS expenseNature FROM income_categories WHERE lower(name) = lower(:name) LIMIT 1")
     protected abstract suspend fun incomeByName(name: String): CategoryEntity?
 
     suspend fun byName(name: String, isIncome: Boolean): CategoryEntity? =
         if (isIncome) incomeByName(name) else expenseByName(name)
 
     @Query(
-        """SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived FROM expense_categories
+        """SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived, expenseNature FROM expense_categories
            UNION ALL
-           SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived FROM income_categories
+           SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived, 'DISCRETIONARY' AS expenseNature FROM income_categories
            ORDER BY id""",
     )
     abstract suspend fun allOnce(): List<CategoryEntity>
@@ -65,8 +65,8 @@ abstract class CategoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun restoreIncome(item: IncomeCategoryEntity): Long
 
-    @Query("UPDATE expense_categories SET name = :name, emoji = :emoji, colorArgb = :colorArgb, isArchived = :isArchived WHERE id = :id")
-    protected abstract suspend fun updateExpense(id: Long, name: String, emoji: String, colorArgb: Long, isArchived: Boolean): Int
+    @Query("UPDATE expense_categories SET name = :name, emoji = :emoji, colorArgb = :colorArgb, isArchived = :isArchived, expenseNature = :expenseNature WHERE id = :id")
+    protected abstract suspend fun updateExpense(id: Long, name: String, emoji: String, colorArgb: Long, isArchived: Boolean, expenseNature: ExpenseNature): Int
 
     @Query("UPDATE income_categories SET name = :name, emoji = :emoji, colorArgb = :colorArgb, isArchived = :isArchived WHERE id = :id")
     protected abstract suspend fun updateIncome(id: Long, name: String, emoji: String, colorArgb: Long, isArchived: Boolean): Int
@@ -83,7 +83,7 @@ abstract class CategoryDao {
         val inserted = if (item.isIncome) {
             insertIncome(IncomeCategoryEntity(id, item.name, item.emoji, item.colorArgb, item.isArchived))
         } else {
-            insertExpense(ExpenseCategoryEntity(id, item.name, item.emoji, item.colorArgb, item.isArchived))
+            insertExpense(ExpenseCategoryEntity(id, item.name, item.emoji, item.colorArgb, item.isArchived, item.expenseNature))
         }
         return if (inserted == -1L) -1L else id
     }
@@ -98,7 +98,7 @@ abstract class CategoryDao {
         val changed = if (item.isIncome) {
             updateIncome(item.id, item.name, item.emoji, item.colorArgb, item.isArchived)
         } else {
-            updateExpense(item.id, item.name, item.emoji, item.colorArgb, item.isArchived)
+            updateExpense(item.id, item.name, item.emoji, item.colorArgb, item.isArchived, item.expenseNature)
         }
         require(changed == 1) { "Category no longer exists" }
     }
@@ -109,7 +109,7 @@ abstract class CategoryDao {
             if (item.isIncome) {
                 restoreIncome(IncomeCategoryEntity(item.id, item.name, item.emoji, item.colorArgb, item.isArchived))
             } else {
-                restoreExpense(ExpenseCategoryEntity(item.id, item.name, item.emoji, item.colorArgb, item.isArchived))
+                restoreExpense(ExpenseCategoryEntity(item.id, item.name, item.emoji, item.colorArgb, item.isArchived, item.expenseNature))
             }
         }
     }
@@ -187,4 +187,23 @@ interface MerchantRuleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(rule: MerchantRuleEntity): Long
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreAll(items: List<MerchantRuleEntity>)
     @Query("DELETE FROM merchant_rules") suspend fun clear()
+}
+
+@Dao
+interface MonthlyPlanDao {
+    @Query("SELECT * FROM monthly_plans WHERE monthKey = :monthKey LIMIT 1") fun observe(monthKey: String): Flow<MonthlyPlanEntity?>
+    @Query("SELECT * FROM monthly_plans ORDER BY monthKey") suspend fun allOnce(): List<MonthlyPlanEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(item: MonthlyPlanEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreAll(items: List<MonthlyPlanEntity>)
+    @Query("DELETE FROM monthly_plans") suspend fun clear()
+}
+
+@Dao
+interface SavingsGoalDao {
+    @Query("SELECT * FROM savings_goals WHERE isArchived = 0 ORDER BY createdAt") fun observeActive(): Flow<List<SavingsGoalEntity>>
+    @Query("SELECT * FROM savings_goals ORDER BY id") suspend fun allOnce(): List<SavingsGoalEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(item: SavingsGoalEntity): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreAll(items: List<SavingsGoalEntity>)
+    @Query("DELETE FROM savings_goals") suspend fun clear()
+    @Delete suspend fun delete(item: SavingsGoalEntity)
 }

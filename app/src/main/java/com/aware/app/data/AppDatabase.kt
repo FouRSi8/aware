@@ -15,8 +15,10 @@ import androidx.room.TypeConverters
         RecurringRuleEntity::class,
         MerchantRuleEntity::class,
         WeeklyReportEntity::class,
+        MonthlyPlanEntity::class,
+        SavingsGoalEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -29,4 +31,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun recurringDao(): RecurringDao
     abstract fun merchantRuleDao(): MerchantRuleDao
     abstract fun weeklyReportDao(): WeeklyReportDao
+    abstract fun monthlyPlanDao(): MonthlyPlanDao
+    abstract fun savingsGoalDao(): SavingsGoalDao
 }

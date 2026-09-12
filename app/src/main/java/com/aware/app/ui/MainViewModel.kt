@@ -18,6 +18,10 @@ import com.aware.app.data.TransactionEntity
 import com.aware.app.data.TransactionSource
 import com.aware.app.data.TransactionStatus
 import com.aware.app.data.TransactionType
+import com.aware.app.data.IncomeKind
+import com.aware.app.data.ExpenseNature
+import com.aware.app.data.MonthlyPlanEntity
+import com.aware.app.data.SavingsGoalEntity
 import com.aware.app.ai.GroqCategorySuggester
 import com.aware.app.statement.IncorrectStatementPasswordException
 import com.aware.app.statement.StatementCandidate
@@ -50,6 +54,8 @@ data class MainUiState(
     val pending: List<CaptureCandidateEntity> = emptyList(),
     val budgets: List<BudgetBucketEntity> = emptyList(),
     val recurring: List<RecurringRuleEntity> = emptyList(),
+    val monthlyPlan: MonthlyPlanEntity? = null,
+    val savingsGoals: List<SavingsGoalEntity> = emptyList(),
 )
 
 data class StatementReviewRow(
@@ -105,7 +111,7 @@ class MainViewModel(
 
     val state: StateFlow<MainUiState> = combine(
         repository.dashboard(), repository.accounts, repository.categories, repository.transactions,
-        repository.pending, repository.budgets(), repository.recurring,
+        repository.pending, repository.budgets(), repository.recurring, repository.monthlyPlan(), repository.savingsGoals,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         MainUiState(
@@ -116,6 +122,8 @@ class MainViewModel(
             pending = values[4] as List<CaptureCandidateEntity>,
             budgets = values[5] as List<BudgetBucketEntity>,
             recurring = values[6] as List<RecurringRuleEntity>,
+            monthlyPlan = values[7] as MonthlyPlanEntity?,
+            savingsGoals = values[8] as List<SavingsGoalEntity>,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
@@ -280,6 +288,7 @@ class MainViewModel(
                     },
                     occurredAt = row.source.occurredAt,
                     sourceFingerprint = row.source.fingerprint,
+                    incomeKind = inferIncomeKind(row.source.merchant, row.type),
                 )
             })
         }.onSuccess { result ->
@@ -301,9 +310,10 @@ class MainViewModel(
         categoryId: Long?,
         accountId: Long?,
         destinationAccountId: Long?,
+        incomeKind: IncomeKind?,
         learnRule: Boolean,
     ) = launchMutation("Couldn’t add that captured payment") {
-        repository.postCandidate(id, amountPaise, merchant, type, categoryId, accountId, destinationAccountId, learnRule)
+        repository.postCandidate(id, amountPaise, merchant, type, categoryId, accountId, destinationAccountId, incomeKind, learnRule)
         selectedReview.value = null
     }
 
@@ -321,6 +331,8 @@ class MainViewModel(
         categoryId: Long?,
         note: String,
         tags: String,
+        incomeKind: IncomeKind?,
+        linkedTransactionId: Long?,
         occurredAt: Long = System.currentTimeMillis(),
     ) = launchMutation("Couldn’t add the transaction", "Transaction added") {
         repository.addTransaction(
@@ -336,6 +348,8 @@ class MainViewModel(
                 note = note,
                 tags = tags.split(',').map(String::trim).filter(String::isNotBlank).distinct().joinToString(","),
                 occurredAt = occurredAt,
+                incomeKind = incomeKind.takeIf { type == TransactionType.INCOME },
+                linkedTransactionId = linkedTransactionId.takeIf { type == TransactionType.REFUND },
             ),
         )
     }
@@ -354,6 +368,8 @@ class MainViewModel(
         categoryId: Long?,
         note: String,
         tags: String,
+        incomeKind: IncomeKind?,
+        linkedTransactionId: Long?,
         occurredAt: Long,
     ) = launchMutation("Couldn’t save the transaction", "Transaction updated") {
         repository.updateTransaction(
@@ -367,11 +383,14 @@ class MainViewModel(
                 note = note,
                 tags = tags.split(',').map(String::trim).filter(String::isNotBlank).distinct().joinToString(","),
                 occurredAt = occurredAt,
+                incomeKind = incomeKind.takeIf { type == TransactionType.INCOME },
+                linkedTransactionId = linkedTransactionId.takeIf { type == TransactionType.REFUND },
             ),
         )
     }
 
-    fun addBudget(
+    fun saveBudget(
+        existing: BudgetBucketEntity?,
         name: String,
         capPaise: Long,
         scope: BudgetScope,
@@ -382,8 +401,9 @@ class MainViewModel(
         startAt: Long,
         endAt: Long?,
         isRecurring: Boolean,
-    ) = launchMutation("Couldn’t create the budget", "Budget created") {
+    ) = launchMutation("Couldn’t save the budget", if (existing == null) "Budget created" else "Budget updated") {
         repository.addBudget(BudgetBucketEntity(
+            id = existing?.id ?: 0L,
             monthKey = java.time.YearMonth.from(java.time.Instant.ofEpochMilli(startAt).atZone(ZoneId.systemDefault())).toString(),
             name = name,
             capPaise = capPaise,
@@ -395,7 +415,47 @@ class MainViewModel(
             startAt = startAt,
             endAt = endAt,
             isRecurring = isRecurring,
+            allocationPaise = existing?.allocationPaise ?: 0L,
+            alert50 = existing?.alert50 ?: true,
+            alert75 = existing?.alert75 ?: true,
+            alert90 = existing?.alert90 ?: true,
+            alert100 = existing?.alert100 ?: true,
         ))
+    }
+
+    fun deleteBudget(item: BudgetBucketEntity) = launchMutation("Couldn’t delete the budget", "Budget deleted") {
+        repository.deleteBudget(item)
+    }
+
+    fun saveMonthlyPlan(expectedIncomePaise: Long, savingsTargetPaise: Long, commitmentTargetPaise: Long) =
+        launchMutation("Couldn’t save the monthly plan", "Monthly plan saved") {
+            repository.saveMonthlyPlan(
+                MonthlyPlanEntity(
+                    monthKey = java.time.YearMonth.now().toString(),
+                    expectedIncomePaise = expectedIncomePaise,
+                    savingsTargetPaise = savingsTargetPaise,
+                    commitmentTargetPaise = commitmentTargetPaise,
+                ),
+            )
+        }
+
+    fun saveSavingsGoal(id: Long, name: String, targetPaise: Long, savedPaise: Long, targetAt: Long?) =
+        launchMutation("Couldn’t save the goal", "Savings goal saved") {
+            val existing = state.value.savingsGoals.firstOrNull { it.id == id }
+            repository.saveSavingsGoal(
+                SavingsGoalEntity(
+                    id = id,
+                    name = name.trim(),
+                    targetPaise = targetPaise,
+                    savedPaise = savedPaise.coerceAtMost(targetPaise),
+                    targetAt = targetAt,
+                    createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                ),
+            )
+        }
+
+    fun deleteSavingsGoal(item: SavingsGoalEntity) = launchMutation("Couldn’t delete the goal", "Savings goal deleted") {
+        repository.deleteSavingsGoal(item)
     }
 
     fun addAccount(name: String, kind: AccountKind, openingBalancePaise: Long) = launchMutation("Couldn’t add the account", "Account added") {
@@ -423,6 +483,7 @@ class MainViewModel(
         emoji: String,
         colorArgb: Long,
         isIncome: Boolean,
+        expenseNature: ExpenseNature,
         onResult: (Result<Long>) -> Unit,
     ) = viewModelScope.launch {
         val result = runCatching {
@@ -435,6 +496,7 @@ class MainViewModel(
                     colorArgb = colorArgb,
                     isIncome = isIncome,
                     isArchived = existing?.isArchived ?: false,
+                    expenseNature = if (isIncome) ExpenseNature.DISCRETIONARY else expenseNature,
                 ),
             )
         }
@@ -452,8 +514,12 @@ class MainViewModel(
         }
     }
 
-    fun addRecurring(name: String, amountPaise: Long, type: TransactionType, accountId: Long, categoryId: Long?, cadence: RecurrenceCadence, customIntervalDays: Int, startAt: Long, endAt: Long?, reminderMinutesBefore: Int) = launchMutation("Couldn’t add the recurring item", "Recurring item added") {
-        repository.addRecurring(RecurringRuleEntity(name = name, amountPaise = amountPaise, type = type, accountId = accountId, categoryId = categoryId, cadence = cadence, customIntervalDays = customIntervalDays, startAt = startAt, endAt = endAt, nextExpectedAt = startAt, reminderMinutesBefore = reminderMinutesBefore))
+    fun saveRecurring(existing: RecurringRuleEntity?, name: String, amountPaise: Long, type: TransactionType, accountId: Long, categoryId: Long?, cadence: RecurrenceCadence, customIntervalDays: Int, startAt: Long, endAt: Long?, reminderMinutesBefore: Int) = launchMutation("Couldn’t save the recurring item", if (existing == null) "Recurring item added" else "Recurring item updated") {
+        repository.saveRecurring(RecurringRuleEntity(id = existing?.id ?: 0L, name = name, amountPaise = amountPaise, type = type, accountId = accountId, categoryId = categoryId, cadence = cadence, customIntervalDays = customIntervalDays, startAt = startAt, endAt = endAt, nextExpectedAt = startAt, reminderMinutesBefore = reminderMinutesBefore, matchingTolerancePaise = existing?.matchingTolerancePaise ?: 0L, isActive = existing?.isActive ?: true))
+    }
+
+    fun deleteRecurring(item: RecurringRuleEntity) = launchMutation("Couldn’t delete the recurring item", "Recurring item deleted") {
+        repository.deleteRecurring(item)
     }
 
     private fun parsePendingStatement(password: CharArray?, showPasswordAnimation: Boolean) = viewModelScope.launch {
@@ -552,6 +618,12 @@ class MainViewModel(
             else -> return null
         }
         return available.firstOrNull { it.name.equals(preferred, ignoreCase = true) }?.id
+    }
+
+    private fun inferIncomeKind(merchant: String, type: TransactionType): IncomeKind? = when {
+        type != TransactionType.INCOME -> null
+        listOf("salary", "payroll", "wages").any { merchant.contains(it, ignoreCase = true) } -> IncomeKind.SALARY
+        else -> null
     }
 
     private fun clearPendingStatement() {

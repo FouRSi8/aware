@@ -192,6 +192,9 @@ import com.aware.app.data.RecurringRuleEntity
 import com.aware.app.data.TransactionEntity
 import com.aware.app.data.TransactionSource
 import com.aware.app.data.TransactionType
+import com.aware.app.data.IncomeKind
+import com.aware.app.data.ExpenseNature
+import com.aware.app.data.SavingsGoalEntity
 import com.aware.app.ui.theme.Appearance
 import com.aware.app.ui.theme.CozyPalette
 import com.aware.app.ui.theme.LocalTokens
@@ -306,6 +309,11 @@ fun AwareApp(
     var addType by remember { mutableStateOf<TransactionType?>(null) }
     var showBudget by remember { mutableStateOf(false) }
     var showRecurring by remember { mutableStateOf(false) }
+    var editingBudget by remember { mutableStateOf<BudgetBucketEntity?>(null) }
+    var editingRecurring by remember { mutableStateOf<RecurringRuleEntity?>(null) }
+    var showMonthlyPlan by remember { mutableStateOf(false) }
+    var editingSavingsGoal by remember { mutableStateOf<SavingsGoalEntity?>(null) }
+    var showNewSavingsGoal by remember { mutableStateOf(false) }
     var showAccount by remember { mutableStateOf(false) }
     var showAccountManager by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<AccountEntity?>(null) }
@@ -372,7 +380,14 @@ fun AwareApp(
                     onOpenTransaction = { selectedTransaction = it },
                     modifier = Modifier.padding(padding),
                 )
-                Tab.PLAN -> PlanScreen(state, { showBudget = true }, { showRecurring = true }, Modifier.padding(padding))
+                Tab.PLAN -> PlanScreen(
+                    state = state,
+                    onBudget = { budget -> editingBudget = budget; showBudget = budget == null },
+                    onRecurring = { recurring -> editingRecurring = recurring; showRecurring = recurring == null },
+                    onMonthlyPlan = { showMonthlyPlan = true },
+                    onSavingsGoal = { goal -> editingSavingsGoal = goal; showNewSavingsGoal = goal == null },
+                    modifier = Modifier.padding(padding),
+                )
                 Tab.INSIGHTS -> InsightsScreen(
                     state,
                     onOpenPlan = { selected = Tab.PLAN },
@@ -462,20 +477,55 @@ fun AwareApp(
             showCategoryForIncome = isIncome
         },
         onAddAccount = { showAccount = true },
-    ) { amount, merchant, type, account, destination, category, note, tags, occurredAt ->
-        viewModel.addManual(amount, merchant, type, account, destination, category, note, tags, occurredAt)
+    ) { amount, merchant, type, account, destination, category, note, tags, incomeKind, linkedTransactionId, occurredAt ->
+        viewModel.addManual(amount, merchant, type, account, destination, category, note, tags, incomeKind, linkedTransactionId, occurredAt)
         addType = null
         confirmation = TransactionConfirmation(amount, merchant, type)
     } }
-    if (showBudget) BudgetDialog(state, { showBudget = false }, onAddCategory = { showCategoryForIncome = false }) { name, cap, scope, category, account, payee, period, start, end, recurring -> viewModel.addBudget(name, cap, scope, category, account, payee, period, start, end, recurring); showBudget = false }
-    if (showRecurring) RecurringDialog(
-        state, { showRecurring = false },
+    if (showBudget || editingBudget != null) BudgetDialog(
+        state = state,
+        budget = editingBudget,
+        onDismiss = { showBudget = false; editingBudget = null },
+        onAddCategory = { showCategoryForIncome = false },
+        onDelete = editingBudget?.let { budget -> { viewModel.deleteBudget(budget); editingBudget = null } },
+    ) { name, cap, scope, category, account, payee, period, start, end, recurring ->
+        viewModel.saveBudget(editingBudget, name, cap, scope, category, account, payee, period, start, end, recurring)
+        showBudget = false
+        editingBudget = null
+    }
+    if (showRecurring || editingRecurring != null) RecurringDialog(
+        state, { showRecurring = false; editingRecurring = null },
+        recurring = editingRecurring,
         onAddCategory = { showCategoryForIncome = it },
         onAddAccount = { showAccount = true },
-    ) { name, amount, type, account, category, cadence, interval, start, end, reminder -> viewModel.addRecurring(name, amount, type, account, category, cadence, interval, start, end, reminder); showRecurring = false }
+        onDelete = editingRecurring?.let { recurring -> { viewModel.deleteRecurring(recurring); editingRecurring = null } },
+    ) { name, amount, type, account, category, cadence, interval, start, end, reminder ->
+        viewModel.saveRecurring(editingRecurring, name, amount, type, account, category, cadence, interval, start, end, reminder)
+        showRecurring = false
+        editingRecurring = null
+    }
+    if (showMonthlyPlan) MonthlyPlanDialog(
+        plan = state.monthlyPlan,
+        onDismiss = { showMonthlyPlan = false },
+    ) { income, savings, commitments ->
+        viewModel.saveMonthlyPlan(income, savings, commitments)
+        showMonthlyPlan = false
+    }
+    if (showNewSavingsGoal || editingSavingsGoal != null) SavingsGoalDialog(
+        goal = editingSavingsGoal,
+        onDismiss = { editingSavingsGoal = null; showNewSavingsGoal = false },
+        onDelete = editingSavingsGoal?.let { goal ->
+            { viewModel.deleteSavingsGoal(goal); editingSavingsGoal = null }
+        },
+    ) { id, name, target, saved, targetAt ->
+        viewModel.saveSavingsGoal(id, name, target, saved, targetAt)
+        editingSavingsGoal = null
+        showNewSavingsGoal = false
+    }
     if (showAccount) AccountDialog({ showAccount = false }) { name, kind, opening -> viewModel.addAccount(name, kind, opening); showAccount = false }
     if (showAccountManager) AccountManagerDialog(
         accounts = state.accounts,
+        transactions = state.transactions,
         onDismiss = { showAccountManager = false },
         onAdd = { editingAccount = AccountEntity(name = "", kind = AccountKind.BANK) },
         onEdit = { editingAccount = it },
@@ -596,8 +646,8 @@ fun AwareApp(
                 showCategoryForIncome = isIncome
             },
             onAddAccount = { showAccount = true },
-        ) { amount, merchant, type, account, destination, category, note, tags, occurredAt ->
-            viewModel.updateTransaction(transaction, amount, merchant, type, account, destination, category, note, tags, occurredAt)
+        ) { amount, merchant, type, account, destination, category, note, tags, incomeKind, linkedTransactionId, occurredAt ->
+            viewModel.updateTransaction(transaction, amount, merchant, type, account, destination, category, note, tags, incomeKind, linkedTransactionId, occurredAt)
             editingTransaction = null
         }
     }
@@ -645,8 +695,8 @@ fun AwareApp(
             state = state,
             onDismiss = viewModel::closeReview,
             onDiscard = { viewModel.dismissCandidate(candidate.id) },
-            onConfirm = { amount, merchant, type, category, account, destination, learn ->
-                viewModel.confirmCandidate(candidate.id, amount, merchant, type, category, account, destination, learn)
+            onConfirm = { amount, merchant, type, category, account, destination, incomeKind, learn ->
+                viewModel.confirmCandidate(candidate.id, amount, merchant, type, category, account, destination, incomeKind, learn)
                 confirmation = TransactionConfirmation(amount, merchant, type)
             },
             groqConfigured = groqConfigured,
@@ -666,8 +716,8 @@ fun AwareApp(
                 categoryCreatedCallback = null
                 showCategoryForIncome = null
             },
-        ) { name, emoji, color, complete ->
-            viewModel.saveCategory(category?.id ?: 0L, name, emoji, color, isIncome) { result ->
+        ) { name, emoji, color, nature, complete ->
+            viewModel.saveCategory(category?.id ?: 0L, name, emoji, color, isIncome, nature) { result ->
                 complete(result)
                 result.onSuccess { id ->
                     if (category == null) categoryCreatedCallback?.invoke(id)
@@ -1044,10 +1094,6 @@ private fun AwareBalanceHeader(state: MainUiState, period: SummaryPeriod) {
     val heroFill = if (t.maximal) t.panel else t.hero
     val onHero = if (t.maximal) MaterialTheme.colorScheme.onBackground else t.onHero
     val muted = onHero.copy(alpha = .62f)
-    val delta = remember(snapshot) {
-        if (snapshot.previousExpensePaise <= 0L) null
-        else ((snapshot.expensePaise - snapshot.previousExpensePaise) * 100f / snapshot.previousExpensePaise)
-    }
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
     Surface(
         Modifier.fillMaxWidth(),
@@ -1059,10 +1105,10 @@ private fun AwareBalanceHeader(state: MainUiState, period: SummaryPeriod) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     if (t.maximal) {
-                        MachineLabel("balance // net position", markerColor = t.accent)
+                        MachineLabel("safe_to_spend // month", markerColor = t.accent)
                     } else {
                         Text(
-                            "YOUR BALANCE",
+                            "SAFE TO SPEND",
                             color = muted,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -1085,33 +1131,20 @@ private fun AwareBalanceHeader(state: MainUiState, period: SummaryPeriod) {
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AnimatedMoneyAmount(
-                    paise = snapshot.netPaise,
+                    paise = state.summary.safeToSpendPaise,
                     signed = true,
                     style = MaterialTheme.typography.displayLarge,
                     color = onHero,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                delta?.let { percent ->
-                    Spacer(Modifier.width(9.dp))
-                    val down = percent <= 0f
-                    Surface(shape = awareShape(50.dp), color = onHero.copy(alpha = .14f)) {
-                        Text(
-                            (if (down) "↓ " else "↑ ") + "${kotlin.math.abs(percent).toInt()}%",
-                            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            color = onHero,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
             }
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = onHero.copy(alpha = .18f))
             Spacer(Modifier.height(13.dp))
             Row(Modifier.fillMaxWidth()) {
-                HeroFooterMetric("Money in", "+" + money(snapshot.incomePaise + snapshot.refundPaise), onHero, muted, Modifier.weight(1f))
+                HeroFooterMetric("Actual balance", money(state.summary.actualBalancePaise), onHero, muted, Modifier.weight(1f))
                 Box(Modifier.width(1.dp).height(30.dp).background(onHero.copy(alpha = .18f)))
-                HeroFooterMetric("Money out", "−" + money(snapshot.expensePaise), onHero, muted, Modifier.weight(1f).padding(start = 16.dp))
+                HeroFooterMetric("${period.label} out", "−" + money(snapshot.expensePaise), onHero, muted, Modifier.weight(1f).padding(start = 16.dp))
             }
         }
     }
@@ -1488,15 +1521,28 @@ private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: () -> Unit, modifier: Modifier = Modifier) {
-    val totalCap = remember(state.budgets) { state.budgets.sumOf { it.capPaise } }
+private fun PlanScreen(
+    state: MainUiState,
+    onBudget: (BudgetBucketEntity?) -> Unit,
+    onRecurring: (RecurringRuleEntity?) -> Unit,
+    onMonthlyPlan: () -> Unit,
+    onSavingsGoal: (SavingsGoalEntity?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Overall caps take precedence. Without one, only category caps are
+    // aggregated so account/payee views cannot count the same expense twice.
+    val gaugeBudgets = remember(state.budgets) {
+        state.budgets.filter { it.scope == BudgetScope.OVERALL }.takeIf { it.isNotEmpty() }
+            ?: state.budgets.filter { it.scope == BudgetScope.CATEGORY }.distinctBy { it.categoryId }
+    }
+    val totalCap = remember(gaugeBudgets) { gaugeBudgets.sumOf { it.capPaise } }
     // One pass over the ledger per budget, memoized: this used to re-parse the
     // budget month and re-scan every transaction on each recomposition.
     val spentByBudget = remember(state.budgets, state.transactions) {
         state.budgets.associate { it.id to spentForBudget(it, state.transactions) }
     }
-    val totalSpent = remember(spentByBudget, state.budgets) {
-        state.budgets.sumOf { (spentByBudget[it.id] ?: 0L).coerceAtMost(it.capPaise) }
+    val totalSpent = remember(spentByBudget, gaugeBudgets) {
+        gaugeBudgets.sumOf { spentByBudget[it.id] ?: 0L }
     }
     val categoriesById = remember(state.categories) { state.categories.associateBy { it.id } }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp)) {
@@ -1506,7 +1552,7 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 ScreenTitleInline("Budgets", Modifier.weight(1f))
                 Surface(
-                    modifier = Modifier.clickable(onClick = onBudget),
+                    modifier = Modifier.clickable { onBudget(null) },
                     shape = RoundedCornerShape(LocalTokens.current.chipRadius),
                     color = LocalTokens.current.accent,
                     contentColor = LocalTokens.current.onAccent,
@@ -1522,6 +1568,53 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
             ConsoleRule(Modifier.padding(top = 10.dp))
             }
         }
+        item { SavingsControlCard(state, onMonthlyPlan) }
+        if (state.summary.otherIncomePaise > 0) {
+            item {
+                Surface(
+                    Modifier.padding(horizontal = 20.dp, vertical = 6.dp).fillMaxWidth(),
+                    awareShape(14.dp),
+                    LocalTokens.current.warn.copy(alpha = .16f),
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("Classify incoming money", fontWeight = FontWeight.Bold)
+                        Text(
+                            "${money(state.summary.otherIncomePaise)} is excluded from Safe to spend because it is reimbursement, pass-through, or not classified yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
+            }
+        }
+        if (state.summary.unresolvedCashPaise > 0) {
+            item {
+                Surface(
+                    Modifier.padding(horizontal = 20.dp, vertical = 6.dp).fillMaxWidth(),
+                    awareShape(14.dp),
+                    MaterialTheme.colorScheme.surface,
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("${money(state.summary.unresolvedCashPaise)} in cash", fontWeight = FontWeight.Bold)
+                        Text("Record cash expenses from your Cash wallet so ATM withdrawals do not become a black box.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("SAVINGS GOALS", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Pay yourself first", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                }
+                TextButton(onClick = { onSavingsGoal(null) }) { Text("+ Add", fontWeight = FontWeight.SemiBold) }
+            }
+        }
+        if (state.savingsGoals.isEmpty()) {
+            item { EmptyHint("No savings goal yet", "Create a target so saving becomes intentional, not leftover.", Icons.Default.Savings) }
+        } else {
+            items(state.savingsGoals, key = { "goal-${it.id}" }) { goal -> SavingsGoalCard(goal) { onSavingsGoal(goal) } }
+        }
         item { AwareBudgetGauge(totalSpent, totalCap) }
         if (state.budgets.isEmpty()) {
             item { EmptyHint("No budgets yet", "Create a budget and aware will keep the period visible.", Icons.Default.Tune) }
@@ -1533,7 +1626,7 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         pair.forEach { budget ->
-                            AwareBudgetCard(budget, spentByBudget[budget.id] ?: 0L, categoriesById, Modifier.weight(1f))
+                            AwareBudgetCard(budget, spentByBudget[budget.id] ?: 0L, categoriesById, Modifier.weight(1f).clickable { onBudget(budget) })
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
@@ -1546,11 +1639,72 @@ private fun PlanScreen(state: MainUiState, onBudget: () -> Unit, onRecurring: ()
                     Text("RECURRING", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     Text("Expected cash flow", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
                 }
-                TextButton(onClick = onRecurring) { Text("+ Add", fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = { onRecurring(null) }) { Text("+ Add", fontWeight = FontWeight.SemiBold) }
             }
         }
         if (state.recurring.isEmpty()) item { EmptyHint("Nothing scheduled", "Add salary, family support, subscriptions, or any repeating entry.", Icons.AutoMirrored.Filled.ReceiptLong) }
-        else items(state.recurring, key = { it.id }) { RecurringRow(it, state.categories) }
+        else items(state.recurring, key = { it.id }) { rule -> RecurringRow(rule, state.categories, Modifier.clickable { onRecurring(rule) }) }
+    }
+}
+
+@Composable
+private fun SavingsControlCard(state: MainUiState, onEdit: () -> Unit) {
+    val summary = state.summary
+    val daily = if (summary.daysRemaining > 0) summary.safeToSpendPaise / summary.daysRemaining else summary.safeToSpendPaise
+    val safeColor = if (summary.safeToSpendPaise >= 0) LocalTokens.current.positive else LocalTokens.current.negative
+    Surface(
+        Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth(),
+        awareShape(22.dp),
+        LocalTokens.current.hero,
+        contentColor = LocalTokens.current.onHero,
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("SAFE TO SPEND", color = LocalTokens.current.onHero.copy(alpha = .68f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    AnimatedMoneyAmount(summary.safeToSpendPaise, signed = true, style = MaterialTheme.typography.displaySmall, color = LocalTokens.current.onHero)
+                }
+                TextButton(onClick = onEdit) { Text(if (state.monthlyPlan == null) "Set plan" else "Edit", color = LocalTokens.current.onHero, fontWeight = FontWeight.Bold) }
+            }
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = LocalTokens.current.onHero.copy(alpha = .18f))
+            Spacer(Modifier.height(10.dp))
+            Row {
+                HeroFooterMetric("Per day", money(daily.coerceAtLeast(0)), LocalTokens.current.onHero, LocalTokens.current.onHero.copy(alpha = .62f), Modifier.weight(1f))
+                HeroFooterMetric("Protected", money(summary.plannedSavingsPaise), LocalTokens.current.onHero, LocalTokens.current.onHero.copy(alpha = .62f), Modifier.weight(1f))
+                HeroFooterMetric("Days left", summary.daysRemaining.toString(), LocalTokens.current.onHero, LocalTokens.current.onHero.copy(alpha = .62f), Modifier.weight(1f))
+            }
+            if (summary.safeToSpendPaise < 0) {
+                Spacer(Modifier.height(10.dp))
+                Text("Your current plan is overcommitted by ${money(-summary.safeToSpendPaise)}.", color = readableAccent(safeColor, LocalTokens.current.hero), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavingsGoalCard(goal: SavingsGoalEntity, onClick: () -> Unit) {
+    val progress = if (goal.targetPaise <= 0) 0f else goal.savedPaise.toFloat() / goal.targetPaise
+    Surface(
+        Modifier.padding(horizontal = 20.dp, vertical = 5.dp).fillMaxWidth().clickable(onClick = onClick),
+        awareShape(16.dp),
+        MaterialTheme.colorScheme.surface,
+    ) {
+        Column(Modifier.padding(15.dp)) {
+            Row {
+                Text(goal.name, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                Text("${(progress * 100).toInt()}%", color = LocalTokens.current.positive, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = LocalTokens.current.accent,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+            Spacer(Modifier.height(7.dp))
+            Text("${money(goal.savedPaise)} of ${money(goal.targetPaise)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+        }
     }
 }
 
@@ -1633,8 +1787,8 @@ private fun AwareBudgetCard(
     }
 }
 @Composable
-private fun RecurringRow(rule: RecurringRuleEntity, categories: List<CategoryEntity>) {
-    NeoCard(Modifier.padding(horizontal = 20.dp, vertical = 5.dp).fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
+private fun RecurringRow(rule: RecurringRuleEntity, categories: List<CategoryEntity>, modifier: Modifier = Modifier) {
+    NeoCard(modifier.padding(horizontal = 20.dp, vertical = 5.dp).fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(42.dp).clip(CircleShape).background(if (rule.type == TransactionType.INCOME) LocalTokens.current.positive.copy(.2f) else LocalTokens.current.negative.copy(.2f)), contentAlignment = Alignment.Center) {
                 Text(if (rule.type == TransactionType.INCOME) "↗" else "↙", color = if (rule.type == TransactionType.INCOME) LocalTokens.current.positive else LocalTokens.current.negative, fontWeight = FontWeight.SemiBold)
@@ -1663,9 +1817,17 @@ private fun InsightsScreen(
     var dimension by remember { mutableStateOf(InsightDimension.CATEGORY) }
     val periodTransactions = remember(state.transactions, period) { transactionsForPeriod(state.transactions, period) }
     val expenses = remember(periodTransactions) { periodTransactions.filter { it.type == TransactionType.EXPENSE } }
-    val income = remember(periodTransactions) { periodTransactions.filter { it.type == TransactionType.INCOME || it.type == TransactionType.REFUND }.sumOf { it.amountPaise } }
+    val income = remember(periodTransactions) {
+        periodTransactions.filter {
+            it.type == TransactionType.INCOME && it.incomeKind in setOf(IncomeKind.SALARY, IncomeKind.OTHER_EARNED, IncomeKind.GIFT)
+        }.sumOf { it.amountPaise }
+    }
+    val otherCredits = remember(periodTransactions) {
+        periodTransactions.filter { it.type == TransactionType.INCOME && it.incomeKind !in setOf(IncomeKind.SALARY, IncomeKind.OTHER_EARNED, IncomeKind.GIFT) }.sumOf { it.amountPaise }
+    }
+    val refunds = remember(periodTransactions) { periodTransactions.filter { it.type == TransactionType.REFUND }.sumOf { it.amountPaise } }
     val spent = remember(expenses) { expenses.sumOf { it.amountPaise } }
-    val net = income - spent
+    val net = income + refunds - spent
     val byCategory = remember(expenses) { expenses.groupBy { it.categoryId }.mapValues { (_, values) -> values.sumOf { it.amountPaise } }.toList().sortedByDescending { it.second } }
     val byPayee = remember(expenses) { expenses.groupBy { it.merchant.ifBlank { "Unknown payee" } }.mapValues { (_, values) -> values.sumOf { it.amountPaise } }.toList().sortedByDescending { it.second } }
     val byTag = remember(expenses) {
@@ -1702,11 +1864,20 @@ private fun InsightsScreen(
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AwareInsightTile("↗", "Income", income, LocalTokens.current.positive, Modifier.weight(1f))
+                    AwareInsightTile("↗", "Earned", income, LocalTokens.current.positive, Modifier.weight(1f))
                     AwareInsightTile("↘", "Expenses", spent, LocalTokens.current.negative, Modifier.weight(1f))
+                }
+                if (otherCredits > 0 || refunds > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Other credits ${money(otherCredits)} · Refunds ${money(refunds)}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                    )
                 }
             }
         }
+        item { FoodControlCard(expenses, state, period) }
         item { AwareBarChart(bars, Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
         item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -1743,6 +1914,52 @@ private fun InsightsScreen(
         }
         item {
             TextButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { Text("Open budgets →", fontWeight = FontWeight.SemiBold) }
+        }
+    }
+}
+
+@Composable
+private fun FoodControlCard(expenses: List<TransactionEntity>, state: MainUiState, period: SummaryPeriod) {
+    val categoriesById = remember(state.categories) { state.categories.associateBy { it.id } }
+    val food = remember(expenses, categoriesById) {
+        expenses.filter { categoriesById[it.categoryId]?.name in setOf("Food delivery", "Groceries", "Dining") }
+    }
+    if (food.isEmpty()) return
+    val delivery = food.filter { categoriesById[it.categoryId]?.name == "Food delivery" }
+    val deliveryTotal = delivery.sumOf { it.amountPaise }
+    val groceryTotal = food.filter { categoriesById[it.categoryId]?.name == "Groceries" }.sumOf { it.amountPaise }
+    val diningTotal = food.filter { categoriesById[it.categoryId]?.name == "Dining" }.sumOf { it.amountPaise }
+    val projection = if (period == SummaryPeriod.MONTH && LocalDate.now().dayOfMonth > 0) {
+        deliveryTotal * YearMonth.now().lengthOfMonth() / LocalDate.now().dayOfMonth
+    } else deliveryTotal
+    Surface(
+        Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth(),
+        awareShape(16.dp),
+        MaterialTheme.colorScheme.surface,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Food control", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("Frequent small orders are shown separately from groceries.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AwareInsightTile("🛵", "${delivery.size} deliveries", deliveryTotal, LocalTokens.current.negative, Modifier.weight(1f))
+                AwareInsightTile("🛒", "Groceries", groceryTotal, LocalTokens.current.positive, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row {
+                Text("Average delivery", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Text(money(if (delivery.isEmpty()) 0 else deliveryTotal / delivery.size), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+            Row {
+                Text(if (period == SummaryPeriod.MONTH) "Projected this month" else "Delivery in this period", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Text(money(projection), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+            if (diningTotal > 0) {
+                Row {
+                    Text("Dining", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text(money(diningTotal), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
         }
     }
 }
@@ -2177,6 +2394,24 @@ private fun OpenSourceNoticeDialog(onDismiss: () -> Unit) {
 private fun MonthlyReportDialog(state: MainUiState, onDismiss: () -> Unit) {
     val current = remember(state.transactions) { expenseForMonth(state.transactions, 0) }
     val previous = remember(state.transactions) { expenseForMonth(state.transactions, -1) }
+    val zone = ZoneId.systemDefault()
+    val month = YearMonth.now()
+    val monthTransactions = remember(state.transactions) {
+        state.transactions.filter {
+            it.status == com.aware.app.data.TransactionStatus.POSTED &&
+                YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(zone)) == month
+        }
+    }
+    val categoriesById = remember(state.categories) { state.categories.associateBy { it.id } }
+    val salary = monthTransactions.filter { it.type == TransactionType.INCOME && it.incomeKind == IncomeKind.SALARY }.sumOf { it.amountPaise }
+    val earned = monthTransactions.filter { it.type == TransactionType.INCOME && it.incomeKind in setOf(IncomeKind.SALARY, IncomeKind.OTHER_EARNED, IncomeKind.GIFT) }.sumOf { it.amountPaise }
+    val otherCredits = monthTransactions.filter { it.type == TransactionType.INCOME && it.incomeKind !in setOf(IncomeKind.SALARY, IncomeKind.OTHER_EARNED, IncomeKind.GIFT) }.sumOf { it.amountPaise }
+    val refunds = monthTransactions.filter { it.type == TransactionType.REFUND }.sumOf { it.amountPaise }
+    val commitmentSpending = monthTransactions.filter { it.type == TransactionType.EXPENSE && categoriesById[it.categoryId]?.expenseNature == ExpenseNature.COMMITMENT }.sumOf { it.amountPaise }
+    val discretionary = monthTransactions.filter { it.type == TransactionType.EXPENSE && categoriesById[it.categoryId]?.expenseNature == ExpenseNature.DISCRETIONARY }.sumOf { it.amountPaise }
+    val foodDeliveries = monthTransactions.filter { it.type == TransactionType.EXPENSE && categoriesById[it.categoryId]?.name == "Food delivery" }
+    val remaining = earned + refunds - current
+    val savingsRate = if (earned <= 0) 0 else (remaining * 100 / earned).toInt()
     val difference = current - previous
     val direction = when {
         difference > 0 -> "more"
@@ -2200,6 +2435,29 @@ private fun MonthlyReportDialog(state: MainUiState, onDismiss: () -> Unit) {
             color = if (difference <= 0) LocalTokens.current.positive else LocalTokens.current.warn,
             fontWeight = FontWeight.SemiBold,
         )
+        AwareSettingsGroup {
+            TransactionDetailRow("Salary", money(salary))
+            TransactionDetailRow("Other earned income", money((earned - salary).coerceAtLeast(0)))
+            TransactionDetailRow("Excluded/unclassified credits", money(otherCredits))
+            TransactionDetailRow("Refunds", money(refunds))
+            TransactionDetailRow("Commitments", money(commitmentSpending))
+            TransactionDetailRow("Discretionary spending", money(discretionary))
+            TransactionDetailRow("Food-delivery orders", "${foodDeliveries.size} · ${money(foodDeliveries.sumOf { it.amountPaise })}")
+            TransactionDetailRow("Unresolved cash", money(state.summary.unresolvedCashPaise))
+            TransactionDetailRow("True savings rate", "$savingsRate%")
+        }
+        Text("Next-month focus", fontWeight = FontWeight.Bold)
+        val recommendations = buildList {
+            if (otherCredits > 0) add("Classify ${money(otherCredits)} of incoming credits before treating them as spendable.")
+            if (foodDeliveries.size >= 3) add("Reduce delivery frequency from ${foodDeliveries.size} orders; small orders are accumulating.")
+            if (state.summary.unresolvedCashPaise > 0) add("Resolve ${money(state.summary.unresolvedCashPaise)} still sitting in the cash wallet.")
+            if (discretionary > commitmentSpending) add("Set a tighter discretionary cap before the next salary arrives.")
+            if (state.monthlyPlan == null) add("Create next month’s income, savings, and commitment plan on payday.")
+            if (isEmpty()) add("Keep the current plan and protect savings before discretionary spending.")
+        }.take(3)
+        recommendations.forEachIndexed { index, recommendation ->
+            Text("${index + 1}. $recommendation", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        }
         Button(
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth(),
@@ -2428,6 +2686,8 @@ private fun TransactionDetailDialog(
                     TransactionDetailRow("Account", account?.name ?: "Unknown account")
                     if (transaction.type == TransactionType.TRANSFER) TransactionDetailRow("Destination", destination?.name ?: "Unknown account")
                     if (transaction.type != TransactionType.TRANSFER) TransactionDetailRow("Category", category?.let { "${it.emoji} ${it.name}" } ?: "Uncategorized")
+                    if (transaction.type == TransactionType.INCOME) TransactionDetailRow("Income kind", transaction.incomeKind?.let(::incomeKindLabel) ?: "Needs classification")
+                    if (transaction.type == TransactionType.EXPENSE) TransactionDetailRow("Purpose", category?.expenseNature?.let(::expenseNatureLabel) ?: "Unclassified")
                     TransactionDetailRow("Source", transaction.source.name.lowercase().replaceFirstChar(Char::uppercase))
                 }
                 if (transaction.note.isNotBlank()) {
@@ -2556,7 +2816,7 @@ private fun AddTransactionDialog(
     onDismiss: () -> Unit,
     onAddCategory: (Boolean, (Long) -> Unit) -> Unit,
     onAddAccount: () -> Unit,
-    onSave: (Long, String, TransactionType, Long, Long?, Long?, String, String, Long) -> Unit,
+    onSave: (Long, String, TransactionType, Long, Long?, Long?, String, String, IncomeKind?, Long?, Long) -> Unit,
 ) {
     var amount by remember(transaction?.id) { mutableStateOf(transaction?.amountPaise?.let(::editableMoney) ?: "") }
     var merchant by remember(transaction?.id) { mutableStateOf(transaction?.merchant.orEmpty()) }
@@ -2568,15 +2828,21 @@ private fun AddTransactionDialog(
     }
     var destination by remember(transaction?.id) { mutableStateOf(transaction?.destinationAccountId) }
     var categoryId by remember(transaction?.id) { mutableStateOf(transaction?.categoryId) }
+    var incomeKind by remember(transaction?.id) { mutableStateOf(transaction?.incomeKind) }
+    var linkedTransactionId by remember(transaction?.id) { mutableStateOf(transaction?.linkedTransactionId) }
     var occurredAt by remember(transaction?.id) { mutableLongStateOf(transaction?.occurredAt ?: startOfTodayMillis()) }
     var showDatePicker by remember { mutableStateOf(false) }
     val paise = parsePaise(amount)
-    val canSave = paise != null && paise > 0 && accountId > 0 && (type != TransactionType.TRANSFER || destination != null)
+    val canSave = paise != null && paise > 0 && accountId > 0 &&
+        (type != TransactionType.TRANSFER || destination != null) &&
+        (type != TransactionType.INCOME || incomeKind != null)
     fun changeType(nextType: TransactionType) {
         if (nextType != type) {
             type = nextType
             categoryId = null
             destination = null
+            incomeKind = null
+            linkedTransactionId = null
         }
     }
     fun appendAmount(key: String) {
@@ -2648,6 +2914,28 @@ private fun AddTransactionDialog(
                     colors = cozyFieldColors(), shape = awareShape(10.dp), singleLine = true,
                 )
                 Spacer(Modifier.height(14.dp))
+                if (type == TransactionType.INCOME) {
+                    Label("What kind of income?")
+                    ScrollChoices(IncomeKind.entries, incomeKind, { it }, ::incomeKindLabel) { incomeKind = it }
+                    Text(
+                        "Reimbursements and pass-through credits stay outside Safe to spend.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 10.sp,
+                    )
+                    Spacer(Modifier.height(13.dp))
+                }
+                if (type == TransactionType.REFUND) {
+                    Label("Original expense")
+                    val refundable = state.transactions.filter { it.type == TransactionType.EXPENSE }.take(20)
+                    ScrollChoices(
+                        refundable,
+                        linkedTransactionId,
+                        { it.id },
+                        { "${it.merchant} · ${money(it.amountPaise)}" },
+                    ) { linkedTransactionId = it.id }
+                    Text("Linking restores the original category’s spent amount.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                    Spacer(Modifier.height(13.dp))
+                }
                 if (type !in listOf(TransactionType.TRANSFER)) {
                     val available = state.categories.filter { if (type == TransactionType.INCOME || type == TransactionType.REFUND) it.isIncome else !it.isIncome }
                     AwareCategoryPicker(
@@ -2691,7 +2979,7 @@ private fun AddTransactionDialog(
                         else -> "Add expense"
                     },
                     onKey = ::appendAmount,
-                    onSubmit = { if (canSave) onSave(paise ?: 0, merchant, type, accountId, destination, categoryId, note, tags, occurredAt) },
+                    onSubmit = { if (canSave) onSave(paise ?: 0, merchant, type, accountId, destination, categoryId, note, tags, incomeKind, linkedTransactionId, occurredAt) },
                 )
             }
         }
@@ -2871,23 +3159,25 @@ private fun AwareDatePicker(
 @Composable
 private fun BudgetDialog(
     state: MainUiState,
+    budget: BudgetBucketEntity?,
     onDismiss: () -> Unit,
     onAddCategory: () -> Unit,
+    onDelete: (() -> Unit)?,
     onSave: (String, Long, BudgetScope, Long?, Long?, String?, BudgetPeriod, Long, Long?, Boolean) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var cap by remember { mutableStateOf("") }
-    var scope by remember { mutableStateOf(BudgetScope.OVERALL) }
-    var categoryId by remember { mutableStateOf<Long?>(null) }
-    var accountId by remember(state.accounts) { mutableStateOf(state.accounts.firstOrNull { it.isDefault }?.id ?: state.accounts.firstOrNull()?.id) }
-    var payee by remember { mutableStateOf("") }
-    var period by remember { mutableStateOf(BudgetPeriod.MONTHLY) }
-    var isRecurring by remember { mutableStateOf(true) }
-    var startAt by remember { mutableLongStateOf(startOfTodayMillis()) }
-    var endAt by remember { mutableStateOf<Long?>(null) }
+    var name by remember(budget?.id) { mutableStateOf(budget?.name.orEmpty()) }
+    var cap by remember(budget?.id) { mutableStateOf(budget?.capPaise?.let(::editableMoney) ?: "") }
+    var scope by remember(budget?.id) { mutableStateOf(budget?.scope ?: BudgetScope.OVERALL) }
+    var categoryId by remember(budget?.id) { mutableStateOf(budget?.categoryId) }
+    var accountId by remember(state.accounts, budget?.id) { mutableStateOf(budget?.accountId ?: state.accounts.firstOrNull { it.isDefault }?.id ?: state.accounts.firstOrNull()?.id) }
+    var payee by remember(budget?.id) { mutableStateOf(budget?.payee.orEmpty()) }
+    var period by remember(budget?.id) { mutableStateOf(budget?.period ?: BudgetPeriod.MONTHLY) }
+    var isRecurring by remember(budget?.id) { mutableStateOf(budget?.isRecurring ?: true) }
+    var startAt by remember(budget?.id) { mutableLongStateOf(budget?.startAt ?: startOfTodayMillis()) }
+    var endAt by remember(budget?.id) { mutableStateOf(budget?.endAt) }
     var pickingStart by remember { mutableStateOf<Boolean?>(null) }
     val paise = parsePaise(cap)
-    AwareDialog("Create a budget", onDismiss) {
+    AwareDialog(if (budget == null) "Create a budget" else "Edit budget", onDismiss) {
         OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Cap name") }, colors = cozyFieldColors(), singleLine = true)
         MoneyField(cap) { cap = it }
         Label("Scope")
@@ -2919,7 +3209,8 @@ private fun BudgetDialog(
         val scoped = scope != BudgetScope.CATEGORY || categoryId != null
         val accountReady = scope != BudgetScope.ACCOUNT || accountId != null
         val payeeReady = scope != BudgetScope.PAYEE || payee.isNotBlank()
-        Button(onClick = { onSave(name, paise ?: 0, scope, categoryId, accountId, payee, period, startAt, endAt, isRecurring) }, enabled = name.isNotBlank() && paise != null && paise > 0 && scoped && accountReady && payeeReady, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Create budget") }
+        Button(onClick = { onSave(name, paise ?: 0, scope, categoryId, accountId, payee, period, startAt, endAt, isRecurring) }, enabled = name.isNotBlank() && paise != null && paise > 0 && scoped && accountReady && payeeReady, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text(if (budget == null) "Create budget" else "Save budget") }
+        onDelete?.let { delete -> TextButton(onClick = delete, Modifier.fillMaxWidth()) { Text("Delete budget", color = MaterialTheme.colorScheme.error) } }
     }
     pickingStart?.let { start -> AwareDatePicker(
         title = if (start) "Budget starts" else "Budget ends",
@@ -2930,26 +3221,106 @@ private fun BudgetDialog(
 }
 
 @Composable
+private fun MonthlyPlanDialog(
+    plan: com.aware.app.data.MonthlyPlanEntity?,
+    onDismiss: () -> Unit,
+    onSave: (Long, Long, Long) -> Unit,
+) {
+    var income by remember(plan?.monthKey) { mutableStateOf(plan?.expectedIncomePaise?.let(::editableMoney) ?: "") }
+    var savings by remember(plan?.monthKey) { mutableStateOf(plan?.savingsTargetPaise?.let(::editableMoney) ?: "") }
+    var commitments by remember(plan?.monthKey) { mutableStateOf(plan?.commitmentTargetPaise?.let(::editableMoney) ?: "") }
+    val incomePaise = parsePaise(income)
+    val savingsPaise = parsePaise(savings)
+    val commitmentPaise = parsePaise(commitments)
+    val valid = incomePaise != null && incomePaise > 0 && savingsPaise != null && commitmentPaise != null &&
+        savingsPaise + commitmentPaise <= incomePaise
+    AwareDialog("Plan ${YearMonth.now().format(DateTimeFormatter.ofPattern("MMMM yyyy"))}", onDismiss) {
+        Text("Protect savings and commitments before aware calculates what is genuinely safe to spend.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Label("Expected earned income")
+        MoneyField(income) { income = it }
+        Label("Savings to protect")
+        MoneyField(savings) { savings = it }
+        Label("Fixed commitments")
+        MoneyField(commitments) { commitments = it }
+        if (incomePaise != null && savingsPaise != null && commitmentPaise != null) {
+            val flexible = incomePaise - savingsPaise - commitmentPaise
+            Text(
+                "Flexible pool: ${money(flexible.coerceAtLeast(0))}",
+                color = if (flexible >= 0) LocalTokens.current.positive else MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Button(
+            onClick = { onSave(incomePaise ?: 0, savingsPaise ?: 0, commitmentPaise ?: 0) },
+            enabled = valid,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+        ) { Text("Save monthly plan") }
+    }
+}
+
+@Composable
+private fun SavingsGoalDialog(
+    goal: SavingsGoalEntity?,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit)?,
+    onSave: (Long, String, Long, Long, Long?) -> Unit,
+) {
+    var name by remember(goal?.id) { mutableStateOf(goal?.name.orEmpty()) }
+    var target by remember(goal?.id) { mutableStateOf(goal?.targetPaise?.let(::editableMoney) ?: "") }
+    var saved by remember(goal?.id) { mutableStateOf(goal?.savedPaise?.let(::editableMoney) ?: "") }
+    var targetAt by remember(goal?.id) { mutableStateOf(goal?.targetAt) }
+    var showDate by remember { mutableStateOf(false) }
+    val targetPaise = parsePaise(target)
+    val savedPaise = parsePaise(saved)
+    AwareDialog(if (goal == null) "New savings goal" else "Edit savings goal", onDismiss) {
+        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Goal name") }, colors = cozyFieldColors(), singleLine = true)
+        Label("Target amount")
+        MoneyField(target) { target = it }
+        Label("Already saved")
+        MoneyField(saved) { saved = it }
+        OutlinedButton(onClick = { showDate = true }, Modifier.fillMaxWidth()) {
+            Text(targetAt?.let { "Target ${friendlyDate(it)}" } ?: "Add target date")
+        }
+        Button(
+            onClick = { onSave(goal?.id ?: 0L, name, targetPaise ?: 0, savedPaise ?: 0, targetAt) },
+            enabled = name.isNotBlank() && targetPaise != null && targetPaise > 0 && savedPaise != null,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+        ) { Text(if (goal == null) "Create goal" else "Save goal") }
+        onDelete?.let { delete -> TextButton(onClick = delete, Modifier.fillMaxWidth()) { Text("Delete goal", color = MaterialTheme.colorScheme.error) } }
+    }
+    if (showDate) AwareDatePicker(
+        title = "Savings target date",
+        initialMillis = targetAt ?: startOfTodayMillis(),
+        onDismiss = { showDate = false },
+        onConfirm = { targetAt = it; showDate = false },
+    )
+}
+
+@Composable
 private fun RecurringDialog(
     state: MainUiState,
     onDismiss: () -> Unit,
+    recurring: RecurringRuleEntity?,
     onAddCategory: (Boolean) -> Unit,
     onAddAccount: () -> Unit,
+    onDelete: (() -> Unit)?,
     onSave: (String, Long, TransactionType, Long, Long?, RecurrenceCadence, Int, Long, Long?, Int) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(TransactionType.EXPENSE) }
-    var accountId by remember(state.accounts) { mutableLongStateOf(state.accounts.firstOrNull { it.isDefault }?.id ?: 0L) }
-    var categoryId by remember { mutableStateOf<Long?>(null) }
-    var cadence by remember { mutableStateOf(RecurrenceCadence.MONTHLY) }
-    var intervalDays by remember { mutableStateOf("14") }
-    var startAt by remember { mutableLongStateOf(startOfTodayMillis()) }
-    var endAt by remember { mutableStateOf<Long?>(null) }
-    var reminder by remember { mutableIntStateOf(0) }
+    var name by remember(recurring?.id) { mutableStateOf(recurring?.name.orEmpty()) }
+    var amount by remember(recurring?.id) { mutableStateOf(recurring?.amountPaise?.let(::editableMoney) ?: "") }
+    var type by remember(recurring?.id) { mutableStateOf(recurring?.type ?: TransactionType.EXPENSE) }
+    var accountId by remember(state.accounts, recurring?.id) { mutableLongStateOf(recurring?.accountId ?: state.accounts.firstOrNull { it.isDefault }?.id ?: 0L) }
+    var categoryId by remember(recurring?.id) { mutableStateOf(recurring?.categoryId) }
+    var cadence by remember(recurring?.id) { mutableStateOf(recurring?.cadence ?: RecurrenceCadence.MONTHLY) }
+    var intervalDays by remember(recurring?.id) { mutableStateOf((recurring?.customIntervalDays ?: 14).toString()) }
+    var startAt by remember(recurring?.id) { mutableLongStateOf(recurring?.nextExpectedAt ?: startOfTodayMillis()) }
+    var endAt by remember(recurring?.id) { mutableStateOf(recurring?.endAt) }
+    var reminder by remember(recurring?.id) { mutableIntStateOf(recurring?.reminderMinutesBefore ?: 0) }
     var pickingStart by remember { mutableStateOf<Boolean?>(null) }
     val paise = parsePaise(amount)
-    AwareDialog("Expect it again", onDismiss) {
+    AwareDialog(if (recurring == null) "Expect it again" else "Edit expected cash flow", onDismiss) {
         ChoiceRow(listOf(TransactionType.EXPENSE, TransactionType.INCOME), type) { nextType ->
             if (nextType != type) {
                 type = nextType
@@ -2982,7 +3353,8 @@ private fun RecurringDialog(
             onAdd = { onAddCategory(type == TransactionType.INCOME) },
         ) { categoryId = it }
         Text("aware creates an expected item and waits for a matching SMS or your confirmation.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-        Button(onClick = { onSave(name, paise ?: 0, type, accountId, categoryId, cadence, intervalDays.toIntOrNull() ?: 1, startAt, endAt, reminder) }, enabled = name.isNotBlank() && paise != null && paise > 0 && accountId > 0 && (cadence != RecurrenceCadence.CUSTOM || (intervalDays.toIntOrNull() ?: 0) > 0), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Add expectation") }
+        Button(onClick = { onSave(name, paise ?: 0, type, accountId, categoryId, cadence, intervalDays.toIntOrNull() ?: 1, startAt, endAt, reminder) }, enabled = name.isNotBlank() && paise != null && paise > 0 && accountId > 0 && (cadence != RecurrenceCadence.CUSTOM || (intervalDays.toIntOrNull() ?: 0) > 0), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text(if (recurring == null) "Add expectation" else "Save expectation") }
+        onDelete?.let { delete -> TextButton(onClick = delete, Modifier.fillMaxWidth()) { Text("Delete recurring item", color = MaterialTheme.colorScheme.error) } }
     }
     pickingStart?.let { start -> AwareDatePicker(
         title = if (start) "Next due" else "Recurrence ends",
@@ -3009,6 +3381,7 @@ private fun AccountDialog(onDismiss: () -> Unit, onSave: (String, AccountKind, L
 @Composable
 private fun AccountManagerDialog(
     accounts: List<AccountEntity>,
+    transactions: List<TransactionEntity>,
     onDismiss: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (AccountEntity) -> Unit,
@@ -3194,7 +3567,7 @@ private fun CategoryDialog(
     isIncome: Boolean,
     category: CategoryEntity?,
     onDismiss: () -> Unit,
-    onSave: (String, String, Long, (Result<Long>) -> Unit) -> Unit,
+    onSave: (String, String, Long, ExpenseNature, (Result<Long>) -> Unit) -> Unit,
 ) {
     var name by remember(category?.id) { mutableStateOf(category?.name.orEmpty()) }
     var emoji by remember(category?.id) { mutableStateOf(category?.emoji.orEmpty()) }
@@ -3214,6 +3587,7 @@ private fun CategoryDialog(
         )
     }
     var selectedColor by remember(category?.id, t) { mutableStateOf(category?.let { Color(it.colorArgb) } ?: palette.first()) }
+    var nature by remember(category?.id) { mutableStateOf(category?.expenseNature ?: ExpenseNature.DISCRETIONARY) }
     AwareDialog(
         when {
             category != null && isIncome -> "Edit income category"
@@ -3253,6 +3627,15 @@ private fun CategoryDialog(
                 )
             }
         }
+        if (!isIncome) {
+            Label("Spending purpose")
+            ChoiceRow(ExpenseNature.entries, nature, label = ::expenseNatureLabel) { nature = it }
+            Text(
+                "Commitments are reserved before Safe to spend is calculated.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp,
+            )
+        }
         errorMessage?.let { message ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -3272,7 +3655,7 @@ private fun CategoryDialog(
             onClick = {
                 saving = true
                 errorMessage = null
-                onSave(name.trim(), emoji.ifBlank { "✨" }, selectedColor.value.toLong()) { result ->
+                onSave(name.trim(), emoji.ifBlank { "✨" }, selectedColor.value.toLong(), nature) { result ->
                     saving = false
                     result.exceptionOrNull()?.let { error ->
                         errorMessage = error.message
@@ -3301,7 +3684,7 @@ private fun CandidateReviewDialog(
     state: MainUiState,
     onDismiss: () -> Unit,
     onDiscard: () -> Unit,
-    onConfirm: (Long, String, TransactionType, Long?, Long?, Long?, Boolean) -> Unit,
+    onConfirm: (Long, String, TransactionType, Long?, Long?, Long?, IncomeKind?, Boolean) -> Unit,
     groqConfigured: Boolean,
     aiSuggestion: String?,
     onSuggest: () -> Unit,
@@ -3317,17 +3700,22 @@ private fun CandidateReviewDialog(
         mutableStateOf(state.accounts.firstOrNull { candidate.type == TransactionType.TRANSFER && it.kind == AccountKind.CASH }?.id)
     }
     var learn by remember { mutableStateOf(true) }
+    var incomeKind by remember(candidate.id) {
+        mutableStateOf(if (candidate.type == TransactionType.INCOME && candidate.merchant.contains("salary", true)) IncomeKind.SALARY else null)
+    }
     val paise = parsePaise(amount)
     val confident = candidate.confidence >= .82f
     val badge = if (confident) LocalTokens.current.positive else LocalTokens.current.accent
     val badgeInk = readableAccent(LocalTokens.current.onAccent, badge)
     val canConfirm = paise != null && paise > 0 && merchant.isNotBlank() && accountId > 0 &&
-        (type != TransactionType.TRANSFER || destinationAccountId != null)
+        (type != TransactionType.TRANSFER || destinationAccountId != null) &&
+        (type != TransactionType.INCOME || incomeKind != null)
     fun changeType(next: TransactionType) {
         if (next != type) {
             type = next
             categoryId = null
             destinationAccountId = null
+            incomeKind = null
         }
     }
     AwareDialog("Authorize payment", onDismiss) {
@@ -3347,6 +3735,11 @@ private fun CandidateReviewDialog(
         )
         MoneyField(amount) { amount = it }
         OutlinedTextField(merchant, { merchant = it }, Modifier.fillMaxWidth(), label = { Text("Merchant") }, colors = cozyFieldColors(), singleLine = true)
+        if (type == TransactionType.INCOME) {
+            Label("What kind of income?")
+            ScrollChoices(IncomeKind.entries, incomeKind, { it }, ::incomeKindLabel) { incomeKind = it }
+            Text("Unclassified credits stay outside Safe to spend.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+        }
         Label("Account")
         ScrollChoices(state.accounts, accountId, { it.id }, { it.name }, onAdd = onAddAccount) {
             accountId = it.id
@@ -3388,7 +3781,7 @@ private fun CandidateReviewDialog(
                 Checkbox(learn, { learn = it }); Text("Remember this merchant next time", fontWeight = FontWeight.Bold)
             }
         }
-        Button(onClick = { onConfirm(paise ?: 0, merchant, type, categoryId, accountId, destinationAccountId, learn) }, enabled = canConfirm, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Authorize and add") }
+        Button(onClick = { onConfirm(paise ?: 0, merchant, type, categoryId, accountId, destinationAccountId, incomeKind, learn) }, enabled = canConfirm, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Authorize and add") }
         TextButton(onClick = onDiscard, modifier = Modifier.fillMaxWidth()) { Text("Not a transaction — discard", color = MaterialTheme.colorScheme.error) }
     }
 }
@@ -3775,6 +4168,17 @@ private fun GroqKeyDialog(initialKey: String, onDismiss: () -> Unit, onSave: (St
     }
 }
 
+private fun accountBalance(account: AccountEntity, transactions: List<TransactionEntity>): Long =
+    account.openingBalancePaise + transactions.filter { it.status == com.aware.app.data.TransactionStatus.POSTED }.sumOf { transaction ->
+        when {
+            transaction.type == TransactionType.TRANSFER && transaction.accountId == account.id -> -transaction.amountPaise
+            transaction.type == TransactionType.TRANSFER && transaction.destinationAccountId == account.id -> transaction.amountPaise
+            transaction.accountId == account.id && transaction.type == TransactionType.EXPENSE -> -transaction.amountPaise
+            transaction.accountId == account.id && transaction.type in setOf(TransactionType.INCOME, TransactionType.REFUND) -> transaction.amountPaise
+            else -> 0L
+        }
+    }
+
 @Composable
 private fun PasswordDialog(title: String, message: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var password by remember { mutableStateOf("") }
@@ -3844,6 +4248,21 @@ private fun MoneyField(value: String, label: String = "Amount", onChange: (Strin
 
 @Composable
 private fun Label(value: String) { Text(value, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp) }
+
+private fun incomeKindLabel(value: IncomeKind): String = when (value) {
+    IncomeKind.SALARY -> "Salary"
+    IncomeKind.OTHER_EARNED -> "Other earned"
+    IncomeKind.REIMBURSEMENT -> "Reimbursement"
+    IncomeKind.PASS_THROUGH -> "Pass-through"
+    IncomeKind.GIFT -> "Gift"
+}
+
+private fun expenseNatureLabel(value: ExpenseNature): String = when (value) {
+    ExpenseNature.COMMITMENT -> "Commitment"
+    ExpenseNature.ESSENTIAL -> "Essential"
+    ExpenseNature.DISCRETIONARY -> "Discretionary"
+    ExpenseNature.ONE_TIME -> "One-time"
+}
 
 @Composable
 private fun cozyFieldColors() = OutlinedTextFieldDefaults.colors(
@@ -3944,9 +4363,9 @@ private fun spentForBudget(budget: BudgetBucketEntity, transactions: List<Transa
     }
     val start = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
     val end = endDate.atStartOfDay(zone).toInstant().toEpochMilli()
-    return transactions.asSequence()
+    val expenses = transactions.asSequence()
         .filter { it.occurredAt in start until end }
-        .filter { it.type == TransactionType.EXPENSE }
+        .filter { it.status == com.aware.app.data.TransactionStatus.POSTED && it.type == TransactionType.EXPENSE }
         .filter {
             when (budget.scope) {
                 BudgetScope.OVERALL -> true
@@ -3955,7 +4374,13 @@ private fun spentForBudget(budget: BudgetBucketEntity, transactions: List<Transa
                 BudgetScope.PAYEE -> budget.payee.isNullOrBlank() || it.merchant.equals(budget.payee, ignoreCase = true)
             }
         }
+        .toList()
+    val expenseIds = expenses.mapTo(mutableSetOf()) { it.id }
+    val refunds = transactions.asSequence()
+        .filter { it.occurredAt in start until end && it.status == com.aware.app.data.TransactionStatus.POSTED && it.type == TransactionType.REFUND }
+        .filter { it.linkedTransactionId in expenseIds }
         .sumOf { it.amountPaise }
+    return (expenses.sumOf { it.amountPaise } - refunds).coerceAtLeast(0)
 }
 private fun parsePaise(value: String): Long? = value.toBigDecimalOrNull()?.movePointRight(2)?.longValueExact()
 

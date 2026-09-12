@@ -13,8 +13,8 @@ android {
         applicationId = "com.aware.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.5.1"
+        versionCode = 19
+        versionName = "1.6.0"
         multiDexEnabled = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

@@ -13,4 +13,8 @@ class Converters {
     @TypeConverter fun transactionSourceToString(value: TransactionSource) = value.name
     @TypeConverter fun stringToCadence(value: String) = RecurrenceCadence.valueOf(value)
     @TypeConverter fun cadenceToString(value: RecurrenceCadence) = value.name
+    @TypeConverter fun stringToIncomeKind(value: String?) = value?.let(IncomeKind::valueOf)
+    @TypeConverter fun incomeKindToString(value: IncomeKind?) = value?.name
+    @TypeConverter fun stringToExpenseNature(value: String) = ExpenseNature.valueOf(value)
+    @TypeConverter fun expenseNatureToString(value: ExpenseNature) = value.name
 }

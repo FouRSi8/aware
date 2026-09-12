@@ -34,6 +34,7 @@ class AwareApplication : Application() {
             .addMigrations(MIGRATION_1_2)
             .addMigrations(MIGRATION_2_3)
             .addMigrations(MIGRATION_3_4)
+            .addMigrations(MIGRATION_4_5)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
         container = AppContainer(database, secureStore)
@@ -48,6 +49,38 @@ class AwareApplication : Application() {
         BudgetAlertWorker.schedule(this)
         WeeklyReportWorker.schedule(this)
         UpdateCheckWorker.schedule(this)
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE expense_categories ADD COLUMN expenseNature TEXT NOT NULL DEFAULT 'DISCRETIONARY'")
+        db.execSQL("UPDATE expense_categories SET expenseNature = 'COMMITMENT' WHERE lower(name) IN ('family', 'subscriptions')")
+        db.execSQL("UPDATE expense_categories SET expenseNature = 'ESSENTIAL' WHERE lower(name) IN ('groceries', 'travel', 'health')")
+        db.execSQL("UPDATE expense_categories SET expenseNature = 'ONE_TIME' WHERE lower(name) = 'education'")
+        db.execSQL("ALTER TABLE transactions ADD COLUMN incomeKind TEXT")
+        db.execSQL("ALTER TABLE transactions ADD COLUMN linkedTransactionId INTEGER")
+        db.execSQL("UPDATE transactions SET incomeKind = 'SALARY' WHERE type = 'INCOME' AND categoryId IN (SELECT id FROM income_categories WHERE lower(name) = 'salary')")
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS monthly_plans (
+                monthKey TEXT NOT NULL PRIMARY KEY,
+                expectedIncomePaise INTEGER NOT NULL,
+                savingsTargetPaise INTEGER NOT NULL,
+                commitmentTargetPaise INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )""".trimIndent(),
+        )
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS savings_goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                targetPaise INTEGER NOT NULL,
+                savedPaise INTEGER NOT NULL,
+                targetAt INTEGER,
+                isArchived INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL
+            )""".trimIndent(),
+        )
     }
 }
 

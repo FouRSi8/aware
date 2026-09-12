@@ -6,6 +6,8 @@ import com.aware.app.data.CategoryEntity
 import com.aware.app.data.MerchantRuleEntity
 import com.aware.app.data.RecurringRuleEntity
 import com.aware.app.data.TransactionEntity
+import com.aware.app.data.MonthlyPlanEntity
+import com.aware.app.data.SavingsGoalEntity
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -27,6 +29,8 @@ data class BackupPayload(
     val budgets: List<BudgetBucketEntity>,
     val recurring: List<RecurringRuleEntity>,
     val merchantRules: List<MerchantRuleEntity>,
+    val monthlyPlans: List<MonthlyPlanEntity> = emptyList(),
+    val savingsGoals: List<SavingsGoalEntity> = emptyList(),
 )
 
 object BackupCodec {
@@ -67,10 +71,10 @@ object BackupCodec {
         val accountNames = accounts.associate { it.id to it.name }
         val categoryNames = categories.associate { it.id to it.name }
         return buildString {
-            appendLine("date,type,status,amount_inr,merchant,account,destination,category,note,tags,source")
+            appendLine("date,type,income_kind,status,amount_inr,merchant,account,destination,category,note,tags,source")
             transactions.sortedByDescending(TransactionEntity::occurredAt).forEach { item ->
                 append(java.time.Instant.ofEpochMilli(item.occurredAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()).append(',')
-                append(item.type).append(',').append(item.status).append(',').append("%.2f".format(java.util.Locale.ENGLISH, item.amountPaise / 100.0)).append(',')
+                append(item.type).append(',').append(item.incomeKind ?: "").append(',').append(item.status).append(',').append("%.2f".format(java.util.Locale.ENGLISH, item.amountPaise / 100.0)).append(',')
                 append(quote(item.merchant)).append(',').append(quote(accountNames[item.accountId].orEmpty())).append(',')
                 append(quote(accountNames[item.destinationAccountId].orEmpty())).append(',').append(quote(categoryNames[item.categoryId].orEmpty())).append(',')
                 append(quote(item.note)).append(',').append(quote(item.tags)).append(',').appendLine(item.source)

@@ -13,6 +13,8 @@ import kotlinx.serialization.Serializable
 @Serializable enum class RecurrenceCadence { DAILY, WEEKLY, MONTHLY, YEARLY, CUSTOM }
 @Serializable enum class BudgetScope { OVERALL, CATEGORY, ACCOUNT, PAYEE }
 @Serializable enum class BudgetPeriod { DAILY, WEEKLY, MONTHLY, YEARLY }
+@Serializable enum class IncomeKind { SALARY, OTHER_EARNED, REIMBURSEMENT, PASS_THROUGH, GIFT }
+@Serializable enum class ExpenseNature { COMMITMENT, ESSENTIAL, DISCRETIONARY, ONE_TIME }
 
 @Entity(tableName = "accounts")
 @Serializable
@@ -34,6 +36,7 @@ data class CategoryEntity(
     val colorArgb: Long,
     val isIncome: Boolean = false,
     val isArchived: Boolean = false,
+    val expenseNature: ExpenseNature = ExpenseNature.DISCRETIONARY,
 )
 
 @Entity(tableName = "expense_categories", indices = [Index("name", unique = true)])
@@ -43,6 +46,7 @@ data class ExpenseCategoryEntity(
     val emoji: String,
     val colorArgb: Long,
     val isArchived: Boolean = false,
+    val expenseNature: ExpenseNature = ExpenseNature.DISCRETIONARY,
 )
 
 @Entity(tableName = "income_categories", indices = [Index("name", unique = true)])
@@ -79,6 +83,8 @@ data class TransactionEntity(
     val occurredAt: Long,
     val createdAt: Long = System.currentTimeMillis(),
     val sourceFingerprint: String? = null,
+    val incomeKind: IncomeKind? = null,
+    val linkedTransactionId: Long? = null,
 )
 
 @Entity(tableName = "capture_candidates", indices = [Index("fingerprint", unique = true), Index("receivedAt")])
@@ -164,10 +170,39 @@ data class MerchantRuleEntity(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
+@Entity(tableName = "monthly_plans")
+@Serializable
+data class MonthlyPlanEntity(
+    @PrimaryKey val monthKey: String,
+    val expectedIncomePaise: Long = 0,
+    val savingsTargetPaise: Long = 0,
+    val commitmentTargetPaise: Long = 0,
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
+@Entity(tableName = "savings_goals")
+@Serializable
+data class SavingsGoalEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val targetPaise: Long,
+    val savedPaise: Long = 0,
+    val targetAt: Long? = null,
+    val isArchived: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
 data class DashboardSummary(
     val incomePaise: Long = 0,
     val otherIncomePaise: Long = 0,
+    val refundPaise: Long = 0,
     val spendingPaise: Long = 0,
     val savingsPaise: Long = 0,
+    val safeToSpendPaise: Long = 0,
+    val plannedSavingsPaise: Long = 0,
+    val commitmentSpendingPaise: Long = 0,
+    val unresolvedCashPaise: Long = 0,
+    val actualBalancePaise: Long = 0,
+    val daysRemaining: Int = 0,
     val pendingCount: Int = 0,
 )

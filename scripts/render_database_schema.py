@@ -8,10 +8,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = ROOT / "app/schemas/com.aware.app.data.AppDatabase/4.json"
-OUTPUT = ROOT / "docs/media/database-schema-v4.png"
+SCHEMA = ROOT / "app/schemas/com.aware.app.data.AppDatabase/5.json"
+OUTPUT = ROOT / "docs/media/database-schema-v5.png"
 
-WIDTH, HEIGHT = 3200, 2760
+WIDTH, HEIGHT = 3200, 3470
 BACKGROUND = "#101416"
 SURFACE = "#192024"
 SURFACE_ALT = "#20292E"
@@ -71,12 +71,14 @@ def main() -> None:
         "expense_categories": (70, 250),
         "income_categories": (70, 690),
         "accounts": (70, 1130),
-        "capture_candidates": (70, 1710),
-        "transactions": (1140, 520),
-        "merchant_rules": (1140, 1530),
+        "capture_candidates": (70, 1510),
+        "transactions": (1140, 250),
+        "merchant_rules": (1140, 1120),
+        "monthly_plans": (1140, 1590),
         "budget_buckets": (2230, 250),
-        "recurring_rules": (2230, 1280),
-        "weekly_reports": (2230, 2160),
+        "recurring_rules": (2230, 1090),
+        "weekly_reports": (2230, 1830),
+        "savings_goals": (2230, 2370),
     }
     box_width = 900
     row_height = 42
@@ -88,7 +90,7 @@ def main() -> None:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
     draw.text((70, 56), "aware database schema", font=TITLE, fill=TEXT)
-    draw.text((70, 132), "Room v4 · encrypted locally · monetary values stored as integer paise", font=SUBTITLE, fill=MUTED)
+    draw.text((70, 132), "Room v5 · encrypted locally · monetary values stored as integer paise", font=SUBTITLE, fill=MUTED)
 
     def right(name: str, ratio: float = .5) -> tuple[int, int]:
         x1, y1, x2, y2 = boxes[name]
@@ -141,7 +143,7 @@ def main() -> None:
             type_box = draw.textbbox((0, 0), type_name, font=FIELD)
             draw.text((x2 - 28 - (type_box[2] - type_box[0]), row_y), type_name, font=FIELD, fill=MUTED)
 
-    relation_x, relation_y = 1140, 1990
+    relation_x, relation_y = 1140, 2220
     draw.rounded_rectangle((relation_x, relation_y, relation_x + 900, relation_y + 575), 24, fill=SURFACE, outline=BORDER, width=3)
     draw.text((relation_x + 28, relation_y + 22), "relationship rules", font=TABLE_TITLE, fill=TEXT)
     relationships = [
@@ -153,6 +155,8 @@ def main() -> None:
         (LOGICAL, "LOGICAL   merchant_rules.categoryId → globally unique category id"),
         (LOGICAL, "FLOW      capture_candidates → transactions after confirmation"),
         (LOGICAL, "DERIVED   weekly_reports aggregates posted transactions"),
+        (LOGICAL, "PLAN      monthly_plans protects savings and commitments by month"),
+        (LOGICAL, "GOAL      savings_goals tracks user-defined progress targets"),
     ]
     for index, (color, relationship) in enumerate(relationships):
         y = relation_y + 92 + index * 55
