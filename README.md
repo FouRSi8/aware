@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.4.2" src="https://img.shields.io/badge/latest-v1.4.2-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.5.1" src="https://img.shields.io/badge/latest-v1.5.1-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -92,10 +92,10 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest version available: v1.4.2.** The newest source is always on
-> [`main`](https://github.com/FouRSi8/aware/tree/main). This release makes income
-> and expense categories editable and gives category creation a visible saving
-> state with inline validation instead of silent failures.
+> **Latest development version: v1.5.1.** The newest source is always on
+> [`main`](https://github.com/FouRSi8/aware/tree/main). This update separates
+> income and expense categories at the database level, so the same label—such
+> as Family—can exist independently in both lists.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps and SMS permission;
@@ -131,6 +131,16 @@ Compose UI ←── Flow / ViewModel ←── encrypted Room ledger
 
 Kotlin · Jetpack Compose · Material 3 · Room · Coroutines/Flow · WorkManager ·
 Glance · DataStore · Android Keystore · SQLCipher
+
+### Database schema
+
+Income and expense categories live in separate tables with independently unique
+names. Existing v3 databases migrate in place while retaining category IDs and
+every transaction, budget, recurring rule, and merchant mapping.
+
+<p align="center">
+  <img src="docs/media/database-schema-v4.png" alt="Detailed aware Room v4 database schema with all tables, attributes and relationships" width="100%" />
+</p>
 
 ## Open source
 

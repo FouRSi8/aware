@@ -16,6 +16,7 @@ class GroqCategorySuggester(
     private val client: OkHttpClient = OkHttpClient(),
 ) {
     fun configured(): Boolean = !secureStore.readSecret(KEY_NAME).isNullOrBlank()
+    fun savedKey(): String = secureStore.readSecret(KEY_NAME).orEmpty()
     fun saveKey(value: String) = secureStore.saveSecret(KEY_NAME, value.trim())
 
     suspend fun suggest(merchant: String, categories: List<String>): String? = withContext(Dispatchers.IO) {
@@ -67,4 +68,3 @@ class GroqCategorySuggester(
 @Serializable private data class GroqMessage(val role: String, val content: String)
 @Serializable private data class GroqResponse(val choices: List<GroqChoice> = emptyList())
 @Serializable private data class GroqChoice(val message: GroqMessage)
-

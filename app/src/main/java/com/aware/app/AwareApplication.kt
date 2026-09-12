@@ -33,6 +33,7 @@ class AwareApplication : Application() {
             .openHelperFactory(factory)
             .addMigrations(MIGRATION_1_2)
             .addMigrations(MIGRATION_2_3)
+            .addMigrations(MIGRATION_3_4)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
         container = AppContainer(database, secureStore)
@@ -47,6 +48,50 @@ class AwareApplication : Application() {
         BudgetAlertWorker.schedule(this)
         WeeklyReportWorker.schedule(this)
         UpdateCheckWorker.schedule(this)
+    }
+}
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS expense_categories (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, emoji TEXT NOT NULL, colorArgb INTEGER NOT NULL, isArchived INTEGER NOT NULL)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_expense_categories_name ON expense_categories (name)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS income_categories (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, emoji TEXT NOT NULL, colorArgb INTEGER NOT NULL, isArchived INTEGER NOT NULL)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_income_categories_name ON income_categories (name)")
+        db.execSQL("INSERT INTO expense_categories (id, name, emoji, colorArgb, isArchived) SELECT id, name, emoji, colorArgb, isArchived FROM categories WHERE isIncome = 0")
+        db.execSQL("INSERT INTO income_categories (id, name, emoji, colorArgb, isArchived) SELECT id, name, emoji, colorArgb, isArchived FROM categories WHERE isIncome = 1")
+
+        // SQLite cannot point one foreign key at two category tables. Category IDs
+        // remain globally unique, while account relations keep database-enforced FKs.
+        db.execSQL(
+            """CREATE TABLE transactions_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                amountPaise INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                accountId INTEGER NOT NULL,
+                destinationAccountId INTEGER,
+                categoryId INTEGER,
+                merchant TEXT NOT NULL,
+                note TEXT NOT NULL,
+                tags TEXT NOT NULL,
+                occurredAt INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                sourceFingerprint TEXT,
+                FOREIGN KEY(accountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                FOREIGN KEY(destinationAccountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE SET NULL
+            )""".trimIndent(),
+        )
+        db.execSQL("INSERT INTO transactions_new SELECT id, amountPaise, currency, type, status, source, accountId, destinationAccountId, categoryId, merchant, note, tags, occurredAt, createdAt, sourceFingerprint FROM transactions")
+        db.execSQL("DROP TABLE transactions")
+        db.execSQL("DROP TABLE categories")
+        db.execSQL("ALTER TABLE transactions_new RENAME TO transactions")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_occurredAt ON transactions (occurredAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_accountId ON transactions (accountId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_destinationAccountId ON transactions (destinationAccountId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_categoryId ON transactions (categoryId)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_transactions_sourceFingerprint ON transactions (sourceFingerprint)")
     }
 }
 

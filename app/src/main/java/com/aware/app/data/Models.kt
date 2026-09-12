@@ -26,7 +26,6 @@ data class AccountEntity(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
-@Entity(tableName = "categories", indices = [Index("name", unique = true)])
 @Serializable
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -37,13 +36,30 @@ data class CategoryEntity(
     val isArchived: Boolean = false,
 )
 
+@Entity(tableName = "expense_categories", indices = [Index("name", unique = true)])
+data class ExpenseCategoryEntity(
+    @PrimaryKey val id: Long,
+    val name: String,
+    val emoji: String,
+    val colorArgb: Long,
+    val isArchived: Boolean = false,
+)
+
+@Entity(tableName = "income_categories", indices = [Index("name", unique = true)])
+data class IncomeCategoryEntity(
+    @PrimaryKey val id: Long,
+    val name: String,
+    val emoji: String,
+    val colorArgb: Long,
+    val isArchived: Boolean = false,
+)
+
 @Entity(
     tableName = "transactions",
     indices = [Index("occurredAt"), Index("accountId"), Index("destinationAccountId"), Index("categoryId"), Index("sourceFingerprint", unique = true)],
     foreignKeys = [
         ForeignKey(AccountEntity::class, ["id"], ["accountId"], onDelete = ForeignKey.RESTRICT),
         ForeignKey(AccountEntity::class, ["id"], ["destinationAccountId"], onDelete = ForeignKey.SET_NULL),
-        ForeignKey(CategoryEntity::class, ["id"], ["categoryId"], onDelete = ForeignKey.SET_NULL),
     ],
 )
 @Serializable

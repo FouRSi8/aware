@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -23,15 +24,101 @@ interface AccountDao {
 }
 
 @Dao
-interface CategoryDao {
-    @Query("SELECT * FROM categories WHERE isArchived = 0 ORDER BY isIncome, name") fun observeAll(): Flow<List<CategoryEntity>>
-    @Query("SELECT * FROM categories WHERE lower(name) = lower(:name) LIMIT 1") suspend fun byName(name: String): CategoryEntity?
-    @Query("SELECT * FROM categories ORDER BY id") suspend fun allOnce(): List<CategoryEntity>
-    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertAll(items: List<CategoryEntity>)
-    @Insert suspend fun insert(item: CategoryEntity): Long
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreAll(items: List<CategoryEntity>)
-    @Query("DELETE FROM categories") suspend fun clear()
-    @Update suspend fun update(item: CategoryEntity)
+abstract class CategoryDao {
+    @Query(
+        """SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived FROM expense_categories WHERE isArchived = 0
+           UNION ALL
+           SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived FROM income_categories WHERE isArchived = 0
+           ORDER BY isIncome, name""",
+    )
+    abstract fun observeAll(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived FROM expense_categories WHERE lower(name) = lower(:name) LIMIT 1")
+    protected abstract suspend fun expenseByName(name: String): CategoryEntity?
+
+    @Query("SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived FROM income_categories WHERE lower(name) = lower(:name) LIMIT 1")
+    protected abstract suspend fun incomeByName(name: String): CategoryEntity?
+
+    suspend fun byName(name: String, isIncome: Boolean): CategoryEntity? =
+        if (isIncome) incomeByName(name) else expenseByName(name)
+
+    @Query(
+        """SELECT id, name, emoji, colorArgb, 0 AS isIncome, isArchived FROM expense_categories
+           UNION ALL
+           SELECT id, name, emoji, colorArgb, 1 AS isIncome, isArchived FROM income_categories
+           ORDER BY id""",
+    )
+    abstract suspend fun allOnce(): List<CategoryEntity>
+
+    @Query("SELECT MAX(id) FROM (SELECT id FROM expense_categories UNION ALL SELECT id FROM income_categories)")
+    protected abstract suspend fun highestId(): Long?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun insertExpense(item: ExpenseCategoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun insertIncome(item: IncomeCategoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun restoreExpense(item: ExpenseCategoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun restoreIncome(item: IncomeCategoryEntity): Long
+
+    @Query("UPDATE expense_categories SET name = :name, emoji = :emoji, colorArgb = :colorArgb, isArchived = :isArchived WHERE id = :id")
+    protected abstract suspend fun updateExpense(id: Long, name: String, emoji: String, colorArgb: Long, isArchived: Boolean): Int
+
+    @Query("UPDATE income_categories SET name = :name, emoji = :emoji, colorArgb = :colorArgb, isArchived = :isArchived WHERE id = :id")
+    protected abstract suspend fun updateIncome(id: Long, name: String, emoji: String, colorArgb: Long, isArchived: Boolean): Int
+
+    @Query("DELETE FROM expense_categories")
+    protected abstract suspend fun clearExpenses()
+
+    @Query("DELETE FROM income_categories")
+    protected abstract suspend fun clearIncome()
+
+    @Transaction
+    open suspend fun insert(item: CategoryEntity): Long {
+        val id = item.id.takeIf { it > 0 } ?: ((highestId() ?: 0L) + 1L)
+        val inserted = if (item.isIncome) {
+            insertIncome(IncomeCategoryEntity(id, item.name, item.emoji, item.colorArgb, item.isArchived))
+        } else {
+            insertExpense(ExpenseCategoryEntity(id, item.name, item.emoji, item.colorArgb, item.isArchived))
+        }
+        return if (inserted == -1L) -1L else id
+    }
+
+    @Transaction
+    open suspend fun insertAll(items: List<CategoryEntity>) {
+        items.forEach { insert(it) }
+    }
+
+    @Transaction
+    open suspend fun update(item: CategoryEntity) {
+        val changed = if (item.isIncome) {
+            updateIncome(item.id, item.name, item.emoji, item.colorArgb, item.isArchived)
+        } else {
+            updateExpense(item.id, item.name, item.emoji, item.colorArgb, item.isArchived)
+        }
+        require(changed == 1) { "Category no longer exists" }
+    }
+
+    @Transaction
+    open suspend fun restoreAll(items: List<CategoryEntity>) {
+        items.forEach { item ->
+            if (item.isIncome) {
+                restoreIncome(IncomeCategoryEntity(item.id, item.name, item.emoji, item.colorArgb, item.isArchived))
+            } else {
+                restoreExpense(ExpenseCategoryEntity(item.id, item.name, item.emoji, item.colorArgb, item.isArchived))
+            }
+        }
+    }
+
+    @Transaction
+    open suspend fun clear() {
+        clearExpenses()
+        clearIncome()
+    }
 }
 
 @Dao

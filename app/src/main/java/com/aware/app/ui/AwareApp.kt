@@ -98,6 +98,8 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -171,6 +173,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -598,7 +601,13 @@ fun AwareApp(
             editingTransaction = null
         }
     }
-    if (showGroqKey) GroqKeyDialog({ showGroqKey = false }) { viewModel.saveGroqKey(it); showGroqKey = false }
+    if (showGroqKey) GroqKeyDialog(
+        initialKey = viewModel.savedGroqKey(),
+        onDismiss = { showGroqKey = false },
+    ) {
+        viewModel.saveGroqKey(it)
+        showGroqKey = false
+    }
     if (showBackupPassword) PasswordDialog("Encrypt backup", "Use at least 8 characters. You will need this password to restore.", { showBackupPassword = false }) { onCreateBackup(it); showBackupPassword = false }
     if (showRestorePassword) PasswordDialog("Restore aware", "Enter the password used when this backup was created. Existing ledger data will be replaced.", { showRestorePassword = false }) { onRestore(it); showRestorePassword = false }
     if (showMonthlyReport) MonthlyReportDialog(state) { showMonthlyReport = false }
@@ -3364,7 +3373,14 @@ private fun CandidateReviewDialog(
                     OutlinedButton(onClick = onSuggest) { Text("ASK PRIVATE AI") }
                     aiSuggestion?.let { suggestion ->
                         Spacer(Modifier.width(8.dp))
-                        AssistChip(onClick = { categoryId = state.categories.firstOrNull { it.name == suggestion }?.id }, label = { Text("Try $suggestion") })
+                        AssistChip(
+                            onClick = {
+                                categoryId = state.categories.firstOrNull {
+                                    !it.isIncome && it.name.equals(suggestion, ignoreCase = true)
+                                }?.id
+                            },
+                            label = { Text("Try $suggestion") },
+                        )
                     }
                 }
             }
@@ -3725,12 +3741,37 @@ private fun StorageMetric(label: String, bytes: Long?) {
 }
 
 @Composable
-private fun GroqKeyDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var key by remember { mutableStateOf("") }
+private fun GroqKeyDialog(initialKey: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var key by remember(initialKey) { mutableStateOf(initialKey) }
+    var keyVisible by remember { mutableStateOf(false) }
     AwareDialog("Connect Groq", onDismiss) {
-        Text("Your key is encrypted with Android Keystore. aware sends only redacted merchant words and category names.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(key, { key = it.trim() }, modifier = Modifier.fillMaxWidth(), label = { Text("Groq API key") }, colors = cozyFieldColors(), singleLine = true)
-        Button(onClick = { onSave(key) }, enabled = key.startsWith("gsk_") && key.length > 20, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Save encrypted key") }
+        Text(
+            "Your saved key is encrypted with Android Keystore. aware sends only redacted merchant words and category names.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = key,
+            onValueChange = { key = it.trim() },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Groq API key") },
+            colors = cozyFieldColors(),
+            singleLine = true,
+            visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { keyVisible = !keyVisible }) {
+                    Icon(
+                        imageVector = if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (keyVisible) "Hide API key" else "Show API key",
+                    )
+                }
+            },
+        )
+        Button(
+            onClick = { onSave(key) },
+            enabled = key.startsWith("gsk_") && key.length > 20,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
+        ) { Text(if (initialKey.isBlank()) "Save encrypted key" else "Update encrypted key") }
     }
 }
 

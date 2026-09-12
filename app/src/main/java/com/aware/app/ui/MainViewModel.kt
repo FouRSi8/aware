@@ -121,6 +121,7 @@ class MainViewModel(
 
     fun openReview(id: Long) = viewModelScope.launch { selectedReview.value = repository.candidate(id) }
     fun closeReview() { selectedReview.value = null }
+    fun savedGroqKey(): String = categorySuggester.savedKey()
     fun saveGroqKey(value: String) = launchMutation("Couldn’t save the Groq key", "Groq key saved") {
         categorySuggester.saveKey(value)
         groqConfiguredState.value = value.isNotBlank()
@@ -237,7 +238,11 @@ class MainViewModel(
             val isIncome = target.type == TransactionType.INCOME || target.type == TransactionType.REFUND
             val allowed = state.value.categories.filter { it.isIncome == isIncome }.map { it.name }
             val suggestion = categorySuggester.suggest(target.source.merchant, allowed)
-            val categoryId = suggestion?.let { name -> state.value.categories.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id }
+            val categoryId = suggestion?.let { name ->
+                state.value.categories.firstOrNull {
+                    it.isIncome == isIncome && it.name.equals(name, ignoreCase = true)
+                }?.id
+            }
             if (categoryId != null) {
                 matched++
                 setStatementCategory(target.source.rowNumber, categoryId)
