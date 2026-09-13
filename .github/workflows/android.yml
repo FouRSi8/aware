@@ -28,10 +28,12 @@ jobs:
       - name: Install Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Verify
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
-      - name: Upload debug APK
+        run: ./gradlew --no-daemon testPlayDebugUnitTest testGithubDebugUnitTest lintPlayDebug lintGithubDebug assemblePlayDebug assembleGithubDebug
+      - name: Upload debug APKs
         uses: actions/upload-artifact@v7
         with:
-          name: aware-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: aware-debug-variants
+          path: |
+            app/build/outputs/apk/play/debug/app-play-debug.apk
+            app/build/outputs/apk/github/debug/app-github-debug.apk
           if-no-files-found: error

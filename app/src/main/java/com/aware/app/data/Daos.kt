@@ -139,23 +139,6 @@ interface TransactionDao {
 }
 
 @Dao
-interface WeeklyReportDao {
-    @Query("SELECT * FROM weekly_reports ORDER BY weekStart DESC LIMIT 1") suspend fun latest(): WeeklyReportEntity?
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(report: WeeklyReportEntity): Long
-}
-
-@Dao
-interface CaptureDao {
-    @Query("SELECT * FROM capture_candidates WHERE status = 'PENDING_REVIEW' ORDER BY receivedAt DESC") fun observePending(): Flow<List<CaptureCandidateEntity>>
-    @Query("SELECT * FROM capture_candidates WHERE status = 'PENDING_REVIEW' ORDER BY receivedAt DESC LIMIT 1") suspend fun latestPending(): CaptureCandidateEntity?
-    @Query("SELECT COUNT(*) FROM capture_candidates WHERE status = 'PENDING_REVIEW'") suspend fun pendingCount(): Int
-    @Query("SELECT * FROM capture_candidates WHERE id = :id") suspend fun byId(id: Long): CaptureCandidateEntity?
-    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insert(item: CaptureCandidateEntity): Long
-    @Update suspend fun update(item: CaptureCandidateEntity)
-    @Query("DELETE FROM capture_candidates WHERE receivedAt < :before AND status != 'PENDING_REVIEW'") suspend fun deleteExpired(before: Long)
-}
-
-@Dao
 interface BudgetDao {
     @Query("SELECT * FROM budget_buckets WHERE monthKey = :monthKey ORDER BY name") fun observeMonth(monthKey: String): Flow<List<BudgetBucketEntity>>
     @Query("SELECT * FROM budget_buckets WHERE (isRecurring = 1 OR monthKey = :monthKey) AND (startAt = 0 OR startAt <= :now) AND (endAt IS NULL OR endAt >= :now) ORDER BY name") fun observeActive(monthKey: String, now: Long): Flow<List<BudgetBucketEntity>>

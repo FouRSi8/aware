@@ -87,37 +87,6 @@ data class TransactionEntity(
     val linkedTransactionId: Long? = null,
 )
 
-@Entity(tableName = "capture_candidates", indices = [Index("fingerprint", unique = true), Index("receivedAt")])
-data class CaptureCandidateEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val sender: String,
-    val encryptedBody: String,
-    val amountPaise: Long,
-    val currency: String = "INR",
-    val type: TransactionType,
-    val merchant: String,
-    val accountSuffix: String? = null,
-    val reference: String? = null,
-    val confidence: Float,
-    val fingerprint: String,
-    val receivedAt: Long,
-    val source: TransactionSource = TransactionSource.SMS,
-    val status: TransactionStatus = TransactionStatus.PENDING_REVIEW,
-)
-
-@Entity(tableName = "weekly_reports", indices = [Index(value = ["weekStart"], unique = true)])
-data class WeeklyReportEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val weekStart: Long,
-    val weekEndExclusive: Long,
-    val generatedAt: Long,
-    val incomePaise: Long,
-    val refundPaise: Long,
-    val spendingPaise: Long,
-    val transferPaise: Long,
-    val topMerchant: String? = null,
-)
-
 @Entity(tableName = "budget_buckets", indices = [Index(value = ["monthKey", "categoryId"], unique = true)])
 @Serializable
 data class BudgetBucketEntity(
@@ -204,5 +173,4 @@ data class DashboardSummary(
     val unresolvedCashPaise: Long = 0,
     val actualBalancePaise: Long = 0,
     val daysRemaining: Int = 0,
-    val pendingCount: Int = 0,
 )

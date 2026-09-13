@@ -10,7 +10,6 @@ internal object MonthlyFinanceCalculator {
         categories: List<CategoryEntity>,
         accounts: List<AccountEntity>,
         plan: MonthlyPlanEntity?,
-        pendingCount: Int,
         daysRemaining: Int,
     ): DashboardSummary {
         val postedMonth = monthTransactions.filter { it.status == TransactionStatus.POSTED }
@@ -54,7 +53,6 @@ internal object MonthlyFinanceCalculator {
             unresolvedCashPaise = unresolvedCash,
             actualBalancePaise = actualBalance,
             daysRemaining = daysRemaining,
-            pendingCount = pendingCount,
         )
     }
 }

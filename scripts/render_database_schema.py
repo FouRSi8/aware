@@ -8,10 +8,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = ROOT / "app/schemas/com.aware.app.data.AppDatabase/5.json"
-OUTPUT = ROOT / "docs/media/database-schema-v5.png"
+SCHEMA = ROOT / "app/schemas/com.aware.app.data.AppDatabase/6.json"
+OUTPUT = ROOT / "docs/media/database-schema-v6.png"
 
-WIDTH, HEIGHT = 3200, 3470
+WIDTH, HEIGHT = 3200, 3000
 BACKGROUND = "#101416"
 SURFACE = "#192024"
 SURFACE_ALT = "#20292E"
@@ -71,14 +71,12 @@ def main() -> None:
         "expense_categories": (70, 250),
         "income_categories": (70, 690),
         "accounts": (70, 1130),
-        "capture_candidates": (70, 1510),
+        "savings_goals": (70, 1510),
         "transactions": (1140, 250),
         "merchant_rules": (1140, 1120),
         "monthly_plans": (1140, 1590),
         "budget_buckets": (2230, 250),
         "recurring_rules": (2230, 1090),
-        "weekly_reports": (2230, 1830),
-        "savings_goals": (2230, 2370),
     }
     box_width = 900
     row_height = 42
@@ -90,7 +88,7 @@ def main() -> None:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
     draw.text((70, 56), "aware database schema", font=TITLE, fill=TEXT)
-    draw.text((70, 132), "Room v5 · encrypted locally · monetary values stored as integer paise", font=SUBTITLE, fill=MUTED)
+    draw.text((70, 132), "Room v6 · encrypted locally · monetary values stored as integer paise", font=SUBTITLE, fill=MUTED)
 
     def right(name: str, ratio: float = .5) -> tuple[int, int]:
         x1, y1, x2, y2 = boxes[name]
@@ -109,8 +107,6 @@ def main() -> None:
     arrow(draw, [right("income_categories", .55), (1010, right("income_categories", .55)[1]), (1010, left("transactions", .60)[1]), left("transactions", .60)], LOGICAL, True, "income categoryId")
     arrow(draw, [right("transactions", .70), (2180, right("transactions", .70)[1]), (2180, left("budget_buckets", .60)[1]), left("budget_buckets", .60)], LOGICAL, True, "expense totals")
     arrow(draw, [right("transactions", .82), (2160, right("transactions", .82)[1]), (2160, left("recurring_rules", .46)[1]), left("recurring_rules", .46)], LOGICAL, True, "materialises expected")
-    arrow(draw, [right("transactions", .92), (2140, right("transactions", .92)[1]), (2140, left("weekly_reports", .45)[1]), left("weekly_reports", .45)], LOGICAL, True, "aggregates")
-    arrow(draw, [right("capture_candidates", .42), (1090, right("capture_candidates", .42)[1]), (1090, left("transactions", .78)[1]), left("transactions", .78)], LOGICAL, True, "posts")
     arrow(draw, [right("merchant_rules", .45), (2180, right("merchant_rules", .45)[1]), (2180, 1160), (1090, 1160), (1090, left("transactions", .66)[1]), left("transactions", .66)], LOGICAL, True, "suggests mapping")
 
     for name, entity in entities.items():
@@ -143,7 +139,7 @@ def main() -> None:
             type_box = draw.textbbox((0, 0), type_name, font=FIELD)
             draw.text((x2 - 28 - (type_box[2] - type_box[0]), row_y), type_name, font=FIELD, fill=MUTED)
 
-    relation_x, relation_y = 1140, 2220
+    relation_x, relation_y = 1140, 2050
     draw.rounded_rectangle((relation_x, relation_y, relation_x + 900, relation_y + 575), 24, fill=SURFACE, outline=BORDER, width=3)
     draw.text((relation_x + 28, relation_y + 22), "relationship rules", font=TABLE_TITLE, fill=TEXT)
     relationships = [
@@ -153,8 +149,6 @@ def main() -> None:
         (LOGICAL, "LOGICAL   budget_buckets.categoryId → expense_categories.id"),
         (LOGICAL, "LOGICAL   recurring_rules.categoryId → category table selected by type"),
         (LOGICAL, "LOGICAL   merchant_rules.categoryId → globally unique category id"),
-        (LOGICAL, "FLOW      capture_candidates → transactions after confirmation"),
-        (LOGICAL, "DERIVED   weekly_reports aggregates posted transactions"),
         (LOGICAL, "PLAN      monthly_plans protects savings and commitments by month"),
         (LOGICAL, "GOAL      savings_goals tracks user-defined progress targets"),
     ]

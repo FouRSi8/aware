@@ -10,15 +10,13 @@ import androidx.room.TypeConverters
         ExpenseCategoryEntity::class,
         IncomeCategoryEntity::class,
         TransactionEntity::class,
-        CaptureCandidateEntity::class,
         BudgetBucketEntity::class,
         RecurringRuleEntity::class,
         MerchantRuleEntity::class,
-        WeeklyReportEntity::class,
         MonthlyPlanEntity::class,
         SavingsGoalEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -26,11 +24,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun categoryDao(): CategoryDao
     abstract fun transactionDao(): TransactionDao
-    abstract fun captureDao(): CaptureDao
     abstract fun budgetDao(): BudgetDao
     abstract fun recurringDao(): RecurringDao
     abstract fun merchantRuleDao(): MerchantRuleDao
-    abstract fun weeklyReportDao(): WeeklyReportDao
     abstract fun monthlyPlanDao(): MonthlyPlanDao
     abstract fun savingsGoalDao(): SavingsGoalDao
 }

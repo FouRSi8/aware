@@ -13,11 +13,23 @@ android {
         applicationId = "com.aware.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.6.0"
+        versionCode = 20
+        versionName = "1.6.1"
         multiDexEnabled = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "SELF_UPDATE_ENABLED", "false")
+        }
+        create("github") {
+            dimension = "distribution"
+            buildConfigField("boolean", "SELF_UPDATE_ENABLED", "true")
+        }
     }
 
     buildTypes {
@@ -66,7 +78,6 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.4")
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
-    implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("net.zetetic:sqlcipher-android:4.17.0@aar")

@@ -8,7 +8,6 @@ import com.aware.app.data.AccountKind
 import com.aware.app.data.BudgetBucketEntity
 import com.aware.app.data.BudgetPeriod
 import com.aware.app.data.BudgetScope
-import com.aware.app.data.CaptureCandidateEntity
 import com.aware.app.data.CategoryEntity
 import com.aware.app.data.DashboardSummary
 import com.aware.app.data.AwareRepository
@@ -51,7 +50,6 @@ data class MainUiState(
     val accounts: List<AccountEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
     val transactions: List<TransactionEntity> = emptyList(),
-    val pending: List<CaptureCandidateEntity> = emptyList(),
     val budgets: List<BudgetBucketEntity> = emptyList(),
     val recurring: List<RecurringRuleEntity> = emptyList(),
     val monthlyPlan: MonthlyPlanEntity? = null,
@@ -93,10 +91,6 @@ class MainViewModel(
 ) : ViewModel() {
     private val messageEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = messageEvents.asSharedFlow()
-    private val selectedReview = MutableStateFlow<CaptureCandidateEntity?>(null)
-    val reviewCandidate: StateFlow<CaptureCandidateEntity?> = selectedReview
-    private val aiSuggestionState = MutableStateFlow<String?>(null)
-    val aiSuggestion: StateFlow<String?> = aiSuggestionState
     private val groqConfiguredState = MutableStateFlow(categorySuggester.configured())
     val groqConfigured: StateFlow<Boolean> = groqConfiguredState
     private val appLockState = MutableStateFlow(repository.appLockEnabled())
@@ -111,7 +105,7 @@ class MainViewModel(
 
     val state: StateFlow<MainUiState> = combine(
         repository.dashboard(), repository.accounts, repository.categories, repository.transactions,
-        repository.pending, repository.budgets(), repository.recurring, repository.monthlyPlan(), repository.savingsGoals,
+        repository.budgets(), repository.recurring, repository.monthlyPlan(), repository.savingsGoals,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         MainUiState(
@@ -119,16 +113,13 @@ class MainViewModel(
             accounts = values[1] as List<AccountEntity>,
             categories = values[2] as List<CategoryEntity>,
             transactions = values[3] as List<TransactionEntity>,
-            pending = values[4] as List<CaptureCandidateEntity>,
-            budgets = values[5] as List<BudgetBucketEntity>,
-            recurring = values[6] as List<RecurringRuleEntity>,
-            monthlyPlan = values[7] as MonthlyPlanEntity?,
-            savingsGoals = values[8] as List<SavingsGoalEntity>,
+            budgets = values[4] as List<BudgetBucketEntity>,
+            recurring = values[5] as List<RecurringRuleEntity>,
+            monthlyPlan = values[6] as MonthlyPlanEntity?,
+            savingsGoals = values[7] as List<SavingsGoalEntity>,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
-    fun openReview(id: Long) = viewModelScope.launch { selectedReview.value = repository.candidate(id) }
-    fun closeReview() { selectedReview.value = null }
     fun savedGroqKey(): String = categorySuggester.savedKey()
     fun saveGroqKey(value: String) = launchMutation("Couldn’t save the Groq key", "Groq key saved") {
         categorySuggester.saveKey(value)
@@ -136,10 +127,6 @@ class MainViewModel(
     }
     fun setAppLock(enabled: Boolean) { repository.setAppLock(enabled); appLockState.value = enabled }
     fun setSmartNudges(enabled: Boolean) { repository.setSmartNudges(enabled); smartNudgesState.value = enabled }
-    fun suggestCategory(candidate: CaptureCandidateEntity) = viewModelScope.launch {
-        aiSuggestionState.value = categorySuggester.suggest(candidate.merchant, state.value.categories.filterNot { it.isIncome }.map { it.name })
-    }
-
     fun openStatement(fileName: String, bytes: ByteArray) {
         statementParseJob?.cancel()
         clearPendingStatement()
@@ -300,26 +287,6 @@ class MainViewModel(
         }.onFailure {
             messageEvents.emit("Couldn’t import the statement. Nothing was added.")
         }
-    }
-
-    fun confirmCandidate(
-        id: Long,
-        amountPaise: Long,
-        merchant: String,
-        type: TransactionType,
-        categoryId: Long?,
-        accountId: Long?,
-        destinationAccountId: Long?,
-        incomeKind: IncomeKind?,
-        learnRule: Boolean,
-    ) = launchMutation("Couldn’t add that captured payment") {
-        repository.postCandidate(id, amountPaise, merchant, type, categoryId, accountId, destinationAccountId, incomeKind, learnRule)
-        selectedReview.value = null
-    }
-
-    fun dismissCandidate(id: Long) = launchMutation("Couldn’t discard that captured payment") {
-        repository.dismissCandidate(id)
-        selectedReview.value = null
     }
 
     fun addManual(

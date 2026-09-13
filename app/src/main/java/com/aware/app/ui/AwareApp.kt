@@ -104,7 +104,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -128,7 +127,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -185,12 +183,10 @@ import com.aware.app.data.AccountKind
 import com.aware.app.data.BudgetBucketEntity
 import com.aware.app.data.BudgetPeriod
 import com.aware.app.data.BudgetScope
-import com.aware.app.data.CaptureCandidateEntity
 import com.aware.app.data.CategoryEntity
 import com.aware.app.data.RecurrenceCadence
 import com.aware.app.data.RecurringRuleEntity
 import com.aware.app.data.TransactionEntity
-import com.aware.app.data.TransactionSource
 import com.aware.app.data.TransactionType
 import com.aware.app.data.IncomeKind
 import com.aware.app.data.ExpenseNature
@@ -275,14 +271,8 @@ fun AwareApp(
     cozyPalette: CozyPalette,
     onCozyPaletteChange: (CozyPalette) -> Unit,
     viewModel: MainViewModel,
-    widgetTransactionId: Long?,
-    onWidgetTransactionHandled: () -> Unit,
-    smsGranted: Boolean,
-    paymentNotificationAccessGranted: Boolean,
-    onRequestSms: () -> Unit,
+    selfUpdateEnabled: Boolean,
     onRequestNotifications: () -> Unit,
-    onRequestPaymentNotificationAccess: () -> Unit,
-    onRefreshWidget: () -> Unit,
     onAppLockChange: (Boolean) -> Unit,
     onExportCsv: () -> Unit,
     onChooseStatement: () -> Unit,
@@ -299,9 +289,7 @@ fun AwareApp(
     onDismissUpdate: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
-    val review by viewModel.reviewCandidate.collectAsState()
     val groqConfigured by viewModel.groqConfigured.collectAsState()
-    val aiSuggestion by viewModel.aiSuggestion.collectAsState()
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val smartNudgesEnabled by viewModel.smartNudgesEnabled.collectAsState()
     val statementImport by viewModel.statementImport.collectAsState()
@@ -334,23 +322,11 @@ fun AwareApp(
     var showAppearance by remember { mutableStateOf(false) }
     var showSkin by remember { mutableStateOf(false) }
     var showCozyPalette by remember { mutableStateOf(false) }
-    var showNotificationAccessDisclosure by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { message -> snackbarHostState.showSnackbar(message) }
     }
     LaunchedEffect(restoreReady) { if (restoreReady) showRestorePassword = true }
-    LaunchedEffect(state.pending.map { it.id to it.status }) { onRefreshWidget() }
-    LaunchedEffect(widgetTransactionId) {
-        val transactionId = widgetTransactionId ?: return@LaunchedEffect
-        val result = snackbarHostState.showSnackbar(
-            message = "Transaction added from widget",
-            actionLabel = "Undo",
-            withDismissAction = true,
-        )
-        if (result == SnackbarResult.ActionPerformed) viewModel.deleteTransaction(transactionId)
-        onWidgetTransactionHandled()
-    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -365,7 +341,7 @@ fun AwareApp(
         Box(Modifier.fillMaxSize()) {
             when (selected) {
                 Tab.HOME -> HomeScreen(
-                    state, smsGranted, paymentNotificationAccessGranted, onRequestSms, viewModel::openReview,
+                    state,
                     onAdd = { addType = it },
                     onOpenActivity = { selected = Tab.ACTIVITY },
                     onOpenPlan = { selected = Tab.PLAN },
@@ -398,9 +374,7 @@ fun AwareApp(
                     modifier = Modifier.padding(padding),
                 )
                 Tab.SETTINGS -> SettingsScreen(
-                    state, smsGranted, paymentNotificationAccessGranted, groqConfigured, appLockEnabled, smartNudgesEnabled,
-                    onRequestSms,
-                    { showNotificationAccessDisclosure = true },
+                    state, groqConfigured, appLockEnabled, smartNudgesEnabled,
                     { viewModel.setSmartNudges(!smartNudgesEnabled); if (!smartNudgesEnabled) onRequestNotifications() },
                     {
                         val enabled = !appLockEnabled
@@ -411,7 +385,7 @@ fun AwareApp(
                     { showBackupPassword = true }, onExportCsv, onChooseRestore, { showStorage = true },
                     { showOpenSourceNotice = true }, appearance, { showAppearance = true },
                     skin, { showSkin = true }, cozyPalette, { showCozyPalette = true },
-                    onCheckForUpdates, Modifier.padding(padding),
+                    selfUpdateEnabled, onCheckForUpdates, Modifier.padding(padding),
                 )
             }
         }
@@ -616,24 +590,6 @@ fun AwareApp(
             }
         }
     }
-    if (showNotificationAccessDisclosure) AwareDialog("Capture payment notifications", { showNotificationAccessDisclosure = false }) {
-        Text(
-            "aware will read notifications from Google Pay and super.money to find transaction amounts. Android grants notification access broadly, but aware filters all other apps out on-device.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "Every detected payment stays in Upcoming until you review and approve it. Nothing is added to your ledger automatically.",
-            fontWeight = FontWeight.SemiBold,
-        )
-        Button(
-            onClick = {
-                showNotificationAccessDisclosure = false
-                onRequestPaymentNotificationAccess()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm),
-        ) { Text("Continue to Android settings") }
-    }
     editingTransaction?.let { transaction ->
         AddTransactionDialog(
             state = state,
@@ -687,23 +643,6 @@ fun AwareApp(
             onGroq = viewModel::categoriseStatementWithGroq,
             onAddCategory = { showCategoryForIncome = it },
             onImport = viewModel::importReviewedStatement,
-        )
-    }
-    review?.let { candidate ->
-        CandidateReviewDialog(
-            candidate = candidate,
-            state = state,
-            onDismiss = viewModel::closeReview,
-            onDiscard = { viewModel.dismissCandidate(candidate.id) },
-            onConfirm = { amount, merchant, type, category, account, destination, incomeKind, learn ->
-                viewModel.confirmCandidate(candidate.id, amount, merchant, type, category, account, destination, incomeKind, learn)
-                confirmation = TransactionConfirmation(amount, merchant, type)
-            },
-            groqConfigured = groqConfigured,
-            aiSuggestion = aiSuggestion,
-            onSuggest = { viewModel.suggestCategory(candidate) },
-            onAddCategory = { showCategoryForIncome = it },
-            onAddAccount = { showAccount = true },
         )
     }
     showCategoryForIncome?.let { isIncome ->
@@ -934,10 +873,6 @@ private fun NeoCard(
 @Composable
 private fun HomeScreen(
     state: MainUiState,
-    smsGranted: Boolean,
-    paymentNotificationAccessGranted: Boolean,
-    onRequestSms: () -> Unit,
-    onReview: (Long) -> Unit,
     onAdd: (TransactionType) -> Unit,
     onOpenActivity: () -> Unit,
     onOpenPlan: () -> Unit,
@@ -960,43 +895,12 @@ private fun HomeScreen(
                 period = period,
                 onPeriod = { period = it },
                 onSearch = onOpenActivity,
-                pendingCount = state.pending.size,
-                onReviewPending = { state.pending.firstOrNull()?.let { onReview(it.id) } },
             )
         }
-        if (!smsGranted && !paymentNotificationAccessGranted) {
-            item {
-                val tk = LocalTokens.current
-                Surface(
-                    Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth(),
-                    RoundedCornerShape(if (tk.maximal) 0.dp else 12.dp),
-                    if (tk.maximal) tk.panel else MaterialTheme.colorScheme.surface,
-                    border = if (tk.maximal) BorderStroke(tk.outlineWidth, tk.frame) else null,
-                ) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).clip(awareShape(10.dp)).background(LocalTokens.current.accent.copy(.18f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Sms, null, tint = LocalTokens.current.accent, modifier = Modifier.size(19.dp))
-                        }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Automatic capture is off", fontWeight = FontWeight.SemiBold)
-                            Text("Only new transaction messages", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                        }
-                        TextButton(onClick = onRequestSms) { Text("Enable") }
-                    }
-                }
-            }
-        }
         item { AwareBalanceHeader(state, period) }
-        if (state.pending.isNotEmpty()) {
-            item { AwareSectionHeader("UPCOMING", "${state.pending.size} TO REVIEW") }
-            items(state.pending.take(3), key = { "capture-${it.id}" }) { candidate ->
-                AwareCaptureRow(candidate) { onReview(candidate.id) }
-            }
-        }
         if (visibleTransactions.isEmpty()) {
             item { AwareSectionHeader(period.label.uppercase(), money(0)) }
-            item { EmptyHint("Your log is empty", "Press the plus button or let your next payment arrive.", Icons.Default.Inbox) }
+            item { EmptyHint("Your log is empty", "Press the plus button to record your first money move.", Icons.Default.Inbox) }
         } else {
             grouped.forEach { (date, transactions) ->
                 item(key = "home-$date") { AwareDateHeader(date, transactions) }
@@ -1018,8 +922,6 @@ private fun AwareTopBar(
     period: SummaryPeriod,
     onPeriod: (SummaryPeriod) -> Unit,
     onSearch: () -> Unit,
-    pendingCount: Int,
-    onReviewPending: () -> Unit,
 ) {
     val t = LocalTokens.current
     val searchInk = readableAccent(t.onAccent, t.lilac)
@@ -1051,35 +953,7 @@ private fun AwareTopBar(
                 )
             }
             Spacer(Modifier.weight(1f))
-            if (pendingCount > 0) {
-                Surface(
-                    shape = iconShape,
-                    color = if (t.maximal) Color.Transparent else t.warn.copy(alpha = .2f),
-                    border = if (t.maximal) BorderStroke(t.outlineWidth, t.warn) else null,
-                ) {
-                    IconButton(onClick = onReviewPending, modifier = Modifier.size(40.dp)) {
-                        BadgedBox(
-                            badge = {
-                                Badge(
-                                    containerColor = t.warn,
-                                    contentColor = readableAccent(t.onAccent, t.warn),
-                                ) {
-                                    Text(if (pendingCount > 99) "99+" else pendingCount.toString())
-                                }
-                            },
-                        ) {
-                            Icon(
-                                Icons.Default.Inbox,
-                                "Review $pendingCount pending payment${if (pendingCount == 1) "" else "s"}",
-                                tint = if (t.maximal) t.warn else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                }
-            } else {
-                // Preserve the centered wordmark without showing an inactive duplicate action.
-                Spacer(Modifier.size(40.dp))
-            }
+            Spacer(Modifier.size(40.dp))
         }
         PeriodSelector(period, onPeriod, Modifier.padding(top = 9.dp))
     }
@@ -1154,7 +1028,7 @@ private fun AwareBalanceHeader(state: MainUiState, period: SummaryPeriod) {
             listOf(
                 MetaItem("accounts", state.accounts.size.toString()),
                 MetaItem("caps_set", state.budgets.size.toString()),
-                MetaItem("capture_q", if (state.pending.isEmpty()) "clear" else "${state.pending.size} held"),
+                MetaItem("goals", state.savingsGoals.size.toString()),
             ),
         )
     }
@@ -1218,23 +1092,6 @@ private fun AwareDateHeader(date: LocalDate, transactions: List<TransactionEntit
     AwareSectionHeader(label, (if (net > 0) "+" else if (net < 0) "−" else "") + money(kotlin.math.abs(net)))
 }
 
-@Composable
-private fun AwareCaptureRow(candidate: CaptureCandidateEntity, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(36.dp).clip(awareShape(10.dp)).background(LocalTokens.current.warn.copy(.25f)), contentAlignment = Alignment.Center) {
-            Icon(if (candidate.source == TransactionSource.NOTIFICATION) Icons.Default.Notifications else Icons.Default.Sms, null, tint = LocalTokens.current.warn, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(11.dp))
-        Column(Modifier.weight(1f)) {
-            Text(candidate.merchant, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${candidate.sender} · awaiting your approval", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text(money(candidate.amountPaise), fontWeight = FontWeight.SemiBold)
-    }
-}
 @Composable
 private fun PeriodSelector(selected: SummaryPeriod, onSelected: (SummaryPeriod) -> Unit, modifier: Modifier = Modifier) {
     val t = LocalTokens.current
@@ -2166,13 +2023,9 @@ private data class CategorySlice(val label: String, val emoji: String, val amoun
 @Composable
 private fun SettingsScreen(
     state: MainUiState,
-    smsGranted: Boolean,
-    paymentNotificationAccessGranted: Boolean,
     groqConfigured: Boolean,
     appLockEnabled: Boolean,
     smartNudgesEnabled: Boolean,
-    onRequestSms: () -> Unit,
-    onRequestPaymentNotifications: () -> Unit,
     onToggleNudges: () -> Unit,
     onToggleAppLock: () -> Unit,
     onAddAccount: () -> Unit,
@@ -2190,6 +2043,7 @@ private fun SettingsScreen(
     onSkin: () -> Unit,
     cozyPalette: CozyPalette,
     onCozyPalette: () -> Unit,
+    selfUpdateEnabled: Boolean,
     onCheckForUpdates: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -2238,10 +2092,10 @@ private fun SettingsScreen(
         item { AwareSettingsSection("AUTOMATION") }
         item {
             AwareSettingsGroup {
-                AwareSettingsLink(Icons.Default.Sms, "Transaction SMS", if (smsGranted) "On · manage" else "Enable", LocalTokens.current.accent, onRequestSms)
-                AwareSettingsLink(Icons.Default.Notifications, "Payment notifications", if (paymentNotificationAccessGranted) "On · manage" else "Enable", LocalTokens.current.info, onRequestPaymentNotifications)
                 AwareSettingsLink(Icons.Default.AutoGraph, "AI categorisation", if (groqConfigured) "On" else "Off", LocalTokens.current.positive, onAddGroqKey)
-                AwareSettingsLink(Icons.Default.SystemUpdate, "App updates", "v${BuildConfig.VERSION_NAME} · weekly checks", LocalTokens.current.hero, onCheckForUpdates)
+                if (selfUpdateEnabled) {
+                    AwareSettingsLink(Icons.Default.SystemUpdate, "App updates", "v${BuildConfig.VERSION_NAME} · weekly checks", LocalTokens.current.hero, onCheckForUpdates)
+                }
             }
         }
         item { AwareSettingsSection("DATA") }
@@ -3675,114 +3529,6 @@ private fun CategoryDialog(
             }
             Text(if (category == null) "Create category" else "Save changes", fontWeight = FontWeight.Bold)
         }
-    }
-}
-
-@Composable
-private fun CandidateReviewDialog(
-    candidate: CaptureCandidateEntity,
-    state: MainUiState,
-    onDismiss: () -> Unit,
-    onDiscard: () -> Unit,
-    onConfirm: (Long, String, TransactionType, Long?, Long?, Long?, IncomeKind?, Boolean) -> Unit,
-    groqConfigured: Boolean,
-    aiSuggestion: String?,
-    onSuggest: () -> Unit,
-    onAddCategory: (Boolean) -> Unit,
-    onAddAccount: () -> Unit,
-) {
-    var amount by remember(candidate.id) { mutableStateOf("%.2f".format(Locale.ENGLISH, candidate.amountPaise / 100.0)) }
-    var merchant by remember(candidate.id) { mutableStateOf(candidate.merchant) }
-    var type by remember(candidate.id) { mutableStateOf(candidate.type) }
-    var categoryId by remember { mutableStateOf<Long?>(null) }
-    var accountId by remember(state.accounts) { mutableLongStateOf(state.accounts.firstOrNull { it.isDefault }?.id ?: 0L) }
-    var destinationAccountId by remember(candidate.id, state.accounts) {
-        mutableStateOf(state.accounts.firstOrNull { candidate.type == TransactionType.TRANSFER && it.kind == AccountKind.CASH }?.id)
-    }
-    var learn by remember { mutableStateOf(true) }
-    var incomeKind by remember(candidate.id) {
-        mutableStateOf(if (candidate.type == TransactionType.INCOME && candidate.merchant.contains("salary", true)) IncomeKind.SALARY else null)
-    }
-    val paise = parsePaise(amount)
-    val confident = candidate.confidence >= .82f
-    val badge = if (confident) LocalTokens.current.positive else LocalTokens.current.accent
-    val badgeInk = readableAccent(LocalTokens.current.onAccent, badge)
-    val canConfirm = paise != null && paise > 0 && merchant.isNotBlank() && accountId > 0 &&
-        (type != TransactionType.TRANSFER || destinationAccountId != null) &&
-        (type != TransactionType.INCOME || incomeKind != null)
-    fun changeType(next: TransactionType) {
-        if (next != type) {
-            type = next
-            categoryId = null
-            destinationAccountId = null
-            incomeKind = null
-        }
-    }
-    AwareDialog("Authorize payment", onDismiss) {
-        Surface(shape = awareShape(16.dp), color = badge) {
-            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("DETECTED ${candidate.type.name}", color = badgeInk, fontWeight = FontWeight.Black)
-                Text("${(candidate.confidence * 100).toInt()}% CONFIDENCE", color = badgeInk, fontWeight = FontWeight.Black)
-            }
-        }
-        Text("Captured from ${candidate.sender}. This payment will not appear in your ledger until you approve it here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Label("Transaction type")
-        ChoiceRow(
-            listOf(TransactionType.EXPENSE, TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.REFUND),
-            selected = type,
-            label = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
-            onSelected = ::changeType,
-        )
-        MoneyField(amount) { amount = it }
-        OutlinedTextField(merchant, { merchant = it }, Modifier.fillMaxWidth(), label = { Text("Merchant") }, colors = cozyFieldColors(), singleLine = true)
-        if (type == TransactionType.INCOME) {
-            Label("What kind of income?")
-            ScrollChoices(IncomeKind.entries, incomeKind, { it }, ::incomeKindLabel) { incomeKind = it }
-            Text("Unclassified credits stay outside Safe to spend.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-        }
-        Label("Account")
-        ScrollChoices(state.accounts, accountId, { it.id }, { it.name }, onAdd = onAddAccount) {
-            accountId = it.id
-            if (destinationAccountId == it.id) destinationAccountId = null
-        }
-        if (type == TransactionType.TRANSFER) {
-            Label("To account / cash wallet")
-            ScrollChoices(
-                state.accounts.filter { it.id != accountId },
-                destinationAccountId,
-                { it.id },
-                { it.name },
-                onAdd = onAddAccount,
-            ) { destinationAccountId = it.id }
-        } else {
-            Label("Category")
-            AwareCategoryPicker(
-                state.categories.filter { it.isIncome == (type == TransactionType.INCOME || type == TransactionType.REFUND) },
-                categoryId,
-                onAdd = { onAddCategory(type == TransactionType.INCOME || type == TransactionType.REFUND) },
-            ) { categoryId = it }
-            if (groqConfigured && type == TransactionType.EXPENSE) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = onSuggest) { Text("ASK PRIVATE AI") }
-                    aiSuggestion?.let { suggestion ->
-                        Spacer(Modifier.width(8.dp))
-                        AssistChip(
-                            onClick = {
-                                categoryId = state.categories.firstOrNull {
-                                    !it.isIncome && it.name.equals(suggestion, ignoreCase = true)
-                                }?.id
-                            },
-                            label = { Text("Try $suggestion") },
-                        )
-                    }
-                }
-            }
-            Row(Modifier.fillMaxWidth().clickable { learn = !learn }, verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(learn, { learn = it }); Text("Remember this merchant next time", fontWeight = FontWeight.Bold)
-            }
-        }
-        Button(onClick = { onConfirm(paise ?: 0, merchant, type, categoryId, accountId, destinationAccountId, incomeKind, learn) }, enabled = canConfirm, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) { Text("Authorize and add") }
-        TextButton(onClick = onDiscard, modifier = Modifier.fillMaxWidth()) { Text("Not a transaction — discard", color = MaterialTheme.colorScheme.error) }
     }
 }
 

@@ -2,7 +2,6 @@ package com.aware.app.data
 
 import androidx.room.withTransaction
 import com.aware.app.security.SecureStore
-import com.aware.app.sms.ParsedSms
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.time.Instant
@@ -19,7 +18,6 @@ class AwareRepository(
     val accounts = database.accountDao().observeAll()
     val categories = database.categoryDao().observeAll()
     val transactions = database.transactionDao().observeAll()
-    val pending = database.captureDao().observePending()
     val recurring = database.recurringDao().observeActive()
     val savingsGoals = database.savingsGoalDao().observeActive()
 
@@ -34,15 +32,14 @@ class AwareRepository(
         val from = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val to = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
         return combine(
-            database.transactionDao().observeRange(from, to), pending, categories, monthlyPlan(month), accounts, transactions,
+            database.transactionDao().observeRange(from, to), categories, monthlyPlan(month), accounts, transactions,
         ) { values ->
             @Suppress("UNCHECKED_CAST")
             val items = values[0] as List<TransactionEntity>
-            val candidates = values[1] as List<CaptureCandidateEntity>
-            val currentCategories = values[2] as List<CategoryEntity>
-            val plan = values[3] as MonthlyPlanEntity?
-            val currentAccounts = values[4] as List<AccountEntity>
-            val allTransactions = values[5] as List<TransactionEntity>
+            val currentCategories = values[1] as List<CategoryEntity>
+            val plan = values[2] as MonthlyPlanEntity?
+            val currentAccounts = values[3] as List<AccountEntity>
+            val allTransactions = values[4] as List<TransactionEntity>
             val today = java.time.LocalDate.now(zone)
             MonthlyFinanceCalculator.calculate(
                 monthTransactions = items,
@@ -50,7 +47,6 @@ class AwareRepository(
                 categories = currentCategories,
                 accounts = currentAccounts,
                 plan = plan,
-                pendingCount = candidates.size,
                 daysRemaining = month.lengthOfMonth() - today.dayOfMonth + 1,
             )
         }
@@ -77,92 +73,6 @@ class AwareRepository(
             CategoryEntity(name = "Other income", emoji = "➕", colorArgb = 0xFF5D94B8L, isIncome = true),
         )
         database.categoryDao().insertAll(defaults)
-    }
-
-    suspend fun saveCapture(parsed: ParsedSms, source: TransactionSource = TransactionSource.SMS): Long {
-        val candidate = CaptureCandidateEntity(
-            sender = parsed.sender,
-            encryptedBody = secureStore.encrypt(parsed.rawBody),
-            amountPaise = parsed.amountPaise,
-            type = parsed.type,
-            merchant = parsed.merchant,
-            accountSuffix = parsed.accountSuffix,
-            reference = parsed.reference,
-            confidence = parsed.confidence,
-            fingerprint = parsed.fingerprint,
-            receivedAt = parsed.receivedAt,
-            source = source,
-        )
-        return database.captureDao().insert(candidate)
-    }
-
-    suspend fun postCandidate(
-        id: Long,
-        amountPaise: Long? = null,
-        merchant: String? = null,
-        type: TransactionType? = null,
-        categoryId: Long? = null,
-        accountId: Long? = null,
-        destinationAccountId: Long? = null,
-        incomeKind: IncomeKind? = null,
-        learnRule: Boolean = false,
-    ): Long = database.withTransaction {
-        val candidate = database.captureDao().byId(id) ?: return@withTransaction -1L
-        if (candidate.status != TransactionStatus.PENDING_REVIEW) return@withTransaction -1L
-        val source = database.accountDao().defaultAccount() ?: return@withTransaction -1L
-        val finalType = type ?: candidate.type
-        val cash = if (finalType == TransactionType.TRANSFER) database.accountDao().cashAccount() else null
-        val merchantRule = database.merchantRuleDao().find(candidate.merchant.lowercase())
-        val finalMerchant = merchant?.trim()?.takeIf(String::isNotEmpty) ?: merchantRule?.displayMerchant ?: candidate.merchant
-        val finalCategory = if (finalType == TransactionType.TRANSFER) null else categoryId ?: merchantRule?.categoryId?.takeIf { finalType == candidate.type }
-        val finalAccount = accountId ?: merchantRule?.accountId ?: source.id
-        val finalDestination = destinationAccountId ?: cash?.id
-        if (finalType == TransactionType.TRANSFER && (finalDestination == null || finalDestination == finalAccount)) return@withTransaction -1L
-        val finalAmount = amountPaise ?: candidate.amountPaise
-        val nearExpected = database.transactionDao().expectedNear(
-            finalType,
-            candidate.receivedAt - 3 * 24 * 3600_000L,
-            candidate.receivedAt + 3 * 24 * 3600_000L,
-        ).minByOrNull { kotlin.math.abs(it.amountPaise - finalAmount) }?.takeIf {
-            kotlin.math.abs(it.amountPaise - finalAmount) <= maxOf(100L, (it.amountPaise * 0.02).toLong())
-        }
-        val newTransaction = TransactionEntity(
-                amountPaise = finalAmount,
-                type = finalType,
-                source = candidate.source,
-                accountId = finalAccount,
-                destinationAccountId = finalDestination.takeIf { finalType == TransactionType.TRANSFER },
-                categoryId = finalCategory,
-                merchant = finalMerchant,
-                occurredAt = candidate.receivedAt,
-                sourceFingerprint = candidate.fingerprint,
-                incomeKind = incomeKind.takeIf { finalType == TransactionType.INCOME }
-                    ?: inferIncomeKind(finalMerchant, finalType),
-            )
-        val transactionId = if (nearExpected != null) {
-            database.transactionDao().update(newTransaction.copy(id = nearExpected.id, createdAt = nearExpected.createdAt))
-            nearExpected.id
-        } else database.transactionDao().insert(newTransaction)
-        if (transactionId > 0) {
-            database.captureDao().update(candidate.copy(status = TransactionStatus.POSTED, encryptedBody = ""))
-            if (learnRule && finalCategory != null) {
-                database.merchantRuleDao().upsert(
-                    MerchantRuleEntity(
-                        normalizedMerchant = candidate.merchant.lowercase(),
-                        displayMerchant = finalMerchant,
-                        categoryId = finalCategory,
-                        accountId = finalAccount,
-                    ),
-                )
-            }
-        }
-        transactionId
-    }
-
-    suspend fun dismissCandidate(id: Long) {
-        database.captureDao().byId(id)?.let {
-            database.captureDao().update(it.copy(status = TransactionStatus.DISMISSED, encryptedBody = ""))
-        }
     }
 
     suspend fun addTransaction(item: TransactionEntity): Long = database.transactionDao().insert(item)
@@ -212,42 +122,6 @@ class AwareRepository(
     suspend fun saveMonthlyPlan(item: MonthlyPlanEntity) = database.monthlyPlanDao().upsert(item)
     suspend fun saveSavingsGoal(item: SavingsGoalEntity) = database.savingsGoalDao().upsert(item)
     suspend fun deleteSavingsGoal(item: SavingsGoalEntity) = database.savingsGoalDao().delete(item)
-
-    private fun inferIncomeKind(merchant: String, type: TransactionType): IncomeKind? = when {
-        type != TransactionType.INCOME -> null
-        listOf("salary", "payroll", "wages").any { merchant.contains(it, ignoreCase = true) } -> IncomeKind.SALARY
-        else -> null
-    }
-    suspend fun latestPending() = database.captureDao().latestPending()
-    suspend fun candidate(id: Long) = database.captureDao().byId(id)
-    fun decryptCandidateBody(candidate: CaptureCandidateEntity) = secureStore.decrypt(candidate.encryptedBody)
-    suspend fun pendingCount() = database.captureDao().pendingCount()
-    suspend fun latestWeeklyReport() = database.weeklyReportDao().latest()
-
-    suspend fun generateLatestWeeklyReportIfMissing(now: Long = System.currentTimeMillis()): WeeklyReportEntity {
-        val zone = ZoneId.systemDefault()
-        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
-        val currentWeekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
-        val weekStart = currentWeekStart.minusWeeks(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val weekEnd = currentWeekStart.atStartOfDay(zone).toInstant().toEpochMilli()
-        database.weeklyReportDao().latest()?.takeIf { it.weekStart == weekStart }?.let { return it }
-
-        val transactions = database.transactionDao().rangeOnce(weekStart, weekEnd)
-        val expenses = transactions.filter { it.type == TransactionType.EXPENSE }
-        val report = WeeklyReportEntity(
-            weekStart = weekStart,
-            weekEndExclusive = weekEnd,
-            generatedAt = now,
-            incomePaise = transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise },
-            refundPaise = transactions.filter { it.type == TransactionType.REFUND }.sumOf { it.amountPaise },
-            spendingPaise = expenses.sumOf { it.amountPaise },
-            transferPaise = transactions.filter { it.type == TransactionType.TRANSFER }.sumOf { it.amountPaise },
-            topMerchant = expenses.groupBy { it.merchant.trim() }.maxByOrNull { (_, items) -> items.sumOf { it.amountPaise } }?.key?.takeIf(String::isNotBlank),
-        )
-        database.weeklyReportDao().upsert(report)
-        return report
-    }
-    suspend fun cleanupExpiredRawBodies() = database.captureDao().deleteExpired(Instant.now().minusSeconds(7 * 24 * 3600).toEpochMilli())
 
     suspend fun materializeDueRecurring(now: Long = System.currentTimeMillis()) = database.withTransaction {
         database.recurringDao().due(now).forEach { rule ->

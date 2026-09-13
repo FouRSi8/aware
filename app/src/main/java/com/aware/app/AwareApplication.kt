@@ -15,9 +15,6 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import com.aware.app.data.RecurringWorker
 import com.aware.app.ai.GroqCategorySuggester
 import com.aware.app.data.BudgetAlertWorker
-import com.aware.app.data.WeeklyReportWorker
-import androidx.glance.appwidget.updateAll
-import com.aware.app.widget.AwareWidget
 import com.aware.app.update.UpdateCheckWorker
 
 class AwareApplication : Application() {
@@ -35,20 +32,24 @@ class AwareApplication : Application() {
             .addMigrations(MIGRATION_2_3)
             .addMigrations(MIGRATION_3_4)
             .addMigrations(MIGRATION_4_5)
+            .addMigrations(MIGRATION_5_6)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
         container = AppContainer(database, secureStore)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             container.repository.ensureStarterStructure()
-            container.repository.cleanupExpiredRawBodies()
             container.repository.materializeDueRecurring()
-            container.repository.generateLatestWeeklyReportIfMissing()
-            AwareWidget().updateAll(this@AwareApplication)
         }
         RecurringWorker.schedule(this)
         BudgetAlertWorker.schedule(this)
-        WeeklyReportWorker.schedule(this)
-        UpdateCheckWorker.schedule(this)
+        if (BuildConfig.SELF_UPDATE_ENABLED) UpdateCheckWorker.schedule(this)
+    }
+}
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS capture_candidates")
+        db.execSQL("DROP TABLE IF EXISTS weekly_reports")
     }
 }
 

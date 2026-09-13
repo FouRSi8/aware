@@ -49,7 +49,6 @@ class MonthlyFinanceCalculatorTest {
             categories = listOf(commitment, discretionary),
             accounts = listOf(bank, cash),
             plan = null,
-            pendingCount = 2,
             daysRemaining = 11,
         )
 
@@ -61,7 +60,6 @@ class MonthlyFinanceCalculatorTest {
         assertEquals(-1_266_184, result.safeToSpendPaise)
         assertEquals(17_228, result.actualBalancePaise)
         assertEquals(0, result.unresolvedCashPaise)
-        assertEquals(2, result.pendingCount)
     }
 
     @Test fun protectsPlannedSavingsAndCommitmentsBeforeFlexibleSpending() {
@@ -77,7 +75,6 @@ class MonthlyFinanceCalculatorTest {
             categories = listOf(discretionary),
             accounts = listOf(bank),
             plan = plan,
-            pendingCount = 0,
             daysRemaining = 20,
         )
 
