@@ -104,7 +104,15 @@ while changing typography, shape, surface treatment, and information chrome.
 ## Privacy by design
 
 - Requests no SMS or payment-notification access.
-- Includes no notification-listener service or home-screen widget.
+- Includes no notification-listener service. Three privacy-aware home-screen widgets provide compact, wide, and large money dashboards without reading messages or notifications.
+
+### Home-screen widgets
+
+- **Compact (2 × 2):** safe-to-spend, days remaining, and one-tap expense entry.
+- **Wide (4 × 2):** safe-to-spend, daily allowance, monthly money in/out, and quick entry.
+- **Dashboard (4 × 4):** safe-to-spend, actual balance, daily allowance, income, spending, the most urgent budget, recent activity, and separate expense/income actions.
+- Every widget follows the selected Cozy palette or `f@#k cozy` identity and the app's light, dark, system, or OLED appearance.
+- Ledger, budget, and theme changes refresh the widgets. With app lock enabled, financial values are concealed until the user opens and unlocks aware.
 - Encrypts the Room database with SQLCipher and a Keystore-wrapped key.
 - Has no account, advertisements, analytics SDK, or cloud synchronization.
 - Sends no statements, balances, account numbers, UPI IDs, phone numbers, or references to AI.
@@ -117,7 +125,8 @@ Read the complete [privacy note](PRIVACY.md).
 
 > **Latest development version: v1.6.2.** The newest source is always on
 > [`main`](https://github.com/FouRSi8/aware/tree/main). This update adds native
-> water-drop bottom navigation with GPU-layer motion and reduced-motion support.
+> water-drop bottom navigation plus three privacy-safe home-screen widgets with
+> responsive amount sizing, theme-aware styling, and direct expense/income entry.
 > Manual entry and review-first statement import remain.
 
 The newest personal-testing APK will be attached to the repository's

@@ -147,7 +147,6 @@ data class AwareTokens(
     val heroRadius: Dp,
     val chipRadius: Dp,
     val outlineWidth: Dp,
-    val glow: Dp,
     /** Colour of hairline panel frames and rules. */
     val frame: Color,
     /** Faint fill behind a framed panel. */
@@ -165,7 +164,7 @@ private val CozyLightTokens = AwareTokens(
     warn = CozyApricot, info = CozyPowderBlue, violet = CozyLavender,
     pink = CozyDustyRose, lilac = CozyLilac,
     chart = listOf(CozySage, CozyApricot, CozyLavender, CozyDustyRose, CozyPowderBlue, CozyPistachio),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFFD1C4B6), panel = CozyPaper, maximal = false,
 )
 
@@ -179,7 +178,7 @@ private val CozyDarkTokens = AwareTokens(
     warn = CozyDarkApricot, info = CozyDarkPowderBlue, violet = CozyDarkLavender,
     pink = CozyDarkRose, lilac = Color(0xFFDCD3E8),
     chart = listOf(CozyDarkSage, CozyDarkApricot, CozyDarkLavender, CozyDarkRose, CozyDarkPowderBlue, CozyDarkPistachio),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFF514840), panel = CozyDarkSurface, maximal = false,
 )
 
@@ -193,7 +192,7 @@ private val SageRoseLightTokens = AwareTokens(
     warn = Color(0xFFE0B988), info = Color(0xFFBED0D0), violet = Color(0xFFC7BDD6),
     pink = Color(0xFFD5B2AC), lilac = Color(0xFFE3D9E6),
     chart = listOf(Color(0xFFAEB8A0), Color(0xFFD5B2AC), Color(0xFFE0B988), Color(0xFFBED0D0), Color(0xFFC7BDD6), Color(0xFF8FA58B)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFFCFC7BC), panel = Color(0xFFF1EBE1), maximal = false,
 )
 
@@ -207,7 +206,7 @@ private val SageRoseDarkTokens = AwareTokens(
     warn = Color(0xFFE1BA88), info = Color(0xFFB8CECB), violet = Color(0xFFC9BDDA),
     pink = Color(0xFFD4AAA5), lilac = Color(0xFFDACFE0),
     chart = listOf(Color(0xFFAEB8A0), Color(0xFFD4AAA5), Color(0xFFE1BA88), Color(0xFFB8CECB), Color(0xFFC9BDDA), Color(0xFF8FA58B)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFF5B6758), panel = Color(0xFF202720), maximal = false,
 )
 
@@ -221,7 +220,7 @@ private val PlumHearthLightTokens = AwareTokens(
     warn = Color(0xFFE7C48F), info = Color(0xFFB9CBD2), violet = Color(0xFFB9A8C8),
     pink = Color(0xFFD4A7B5), lilac = Color(0xFFE5D5E2),
     chart = listOf(Color(0xFF9E7183), Color(0xFFE7C48F), Color(0xFFAFC1A5), Color(0xFFB9CBD2), Color(0xFFB9A8C8), Color(0xFFD28C82)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFFD7C5C5), panel = Color(0xFFF5E9E8), maximal = false,
 )
 
@@ -235,7 +234,7 @@ private val PlumHearthDarkTokens = AwareTokens(
     warn = Color(0xFFD9B982), info = Color(0xFFA9C3CB), violet = Color(0xFFC4AED2),
     pink = Color(0xFFD5A4B5), lilac = Color(0xFFD8C1D2),
     chart = listOf(Color(0xFFD5A4B5), Color(0xFFD9B982), Color(0xFFAFC5A7), Color(0xFFA9C3CB), Color(0xFFC4AED2), Color(0xFFD58A7D)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFF684555), panel = Color(0xFF21161C), maximal = false,
 )
 
@@ -249,7 +248,7 @@ private val LinenCafeLightTokens = AwareTokens(
     warn = Color(0xFFB2967D), info = Color(0xFFC5B39F), violet = Color(0xFF9B8990),
     pink = Color(0xFFC79C92), lilac = Color(0xFFE6DDD3),
     chart = listOf(Color(0xFF4A342A), Color(0xFF7D5A44), Color(0xFFB2967D), Color(0xFFD7C9B8), Color(0xFF87967B), Color(0xFFC79C92)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFFCABCAA), panel = Color(0xFFEAE1D6), maximal = false,
 )
 
@@ -263,7 +262,7 @@ private val LinenCafeDarkTokens = AwareTokens(
     warn = Color(0xFFD0AF8F), info = Color(0xFFC7B7A7), violet = Color(0xFFC7B3BC),
     pink = Color(0xFFD5A9A0), lilac = Color(0xFFDED1C7),
     chart = listOf(Color(0xFFD7C9B8), Color(0xFFB2967D), Color(0xFF9B7359), Color(0xFFA9C39F), Color(0xFFC7B3BC), Color(0xFFD5A9A0)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFF745846), panel = Color(0xFF3A2921), maximal = false,
 )
 
@@ -277,7 +276,7 @@ private val NavyTideLightTokens = AwareTokens(
     warn = Color(0xFFD0A574), info = Color(0xFF8CB3C5), violet = Color(0xFF8381A2),
     pink = Color(0xFFC28E9C), lilac = Color(0xFFDADAE6),
     chart = listOf(Color(0xFF2F4156), Color(0xFF567C8D), Color(0xFFC8D9E6), Color(0xFFD0A574), Color(0xFF8381A2), Color(0xFFC28E9C)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFFBACAD2), panel = Color(0xFFE5EDF1), maximal = false,
 )
 
@@ -291,7 +290,7 @@ private val NavyTideDarkTokens = AwareTokens(
     warn = Color(0xFFE0B889), info = Color(0xFFA9CAD8), violet = Color(0xFFBAB5D2),
     pink = Color(0xFFD6A9B5), lilac = Color(0xFFD8D7E5),
     chart = listOf(Color(0xFFC8D9E6), Color(0xFF7FA4B4), Color(0xFF9AC9B1), Color(0xFFE0B889), Color(0xFFBAB5D2), Color(0xFFD6A9B5)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFF567184), panel = Color(0xFF26394B), maximal = false,
 )
 
@@ -305,7 +304,7 @@ private val CharcoalLeatherLightTokens = AwareTokens(
     warn = Color(0xFFB07A51), info = Color(0xFF899DA6), violet = Color(0xFF8C8498),
     pink = Color(0xFFB48B87), lilac = Color(0xFFD9D3D2),
     chart = listOf(Color(0xFF242323), Color(0xFF525254), Color(0xFF795238), Color(0xFF959595), Color(0xFFAEA7A3), Color(0xFF899DA6)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFFC6C0BD), panel = Color(0xFFE6E1DE), maximal = false,
 )
 
@@ -319,7 +318,7 @@ private val CharcoalLeatherDarkTokens = AwareTokens(
     warn = Color(0xFFC89067), info = Color(0xFFA7BBC3), violet = Color(0xFFB9AEC6),
     pink = Color(0xFFD0A4A0), lilac = Color(0xFFD3CCCA),
     chart = listOf(Color(0xFFAEA7A3), Color(0xFF959595), Color(0xFFB47B56), Color(0xFF9AB69C), Color(0xFFA7BBC3), Color(0xFFB9AEC6)),
-    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp, glow = 0.dp,
+    cardRadius = 18.dp, heroRadius = 25.dp, chipRadius = 50.dp, outlineWidth = 0.dp,
     frame = Color(0xFF666160), panel = Color(0xFF303030), maximal = false,
 )
 
@@ -331,7 +330,7 @@ private val MaximalDarkTokens = AwareTokens(
     positive = NeonGreen, negative = NeonRed,
     warn = NeonOrange, info = NeonCyan, violet = NeonViolet, pink = NeonMagenta, lilac = NeonViolet,
     chart = listOf(NeonLime, NeonMagenta, NeonCyan, NeonViolet, NeonOrange, NeonGreen),
-    cardRadius = 0.dp, heroRadius = 0.dp, chipRadius = 0.dp, outlineWidth = 1.dp, glow = 14.dp,
+    cardRadius = 0.dp, heroRadius = 0.dp, chipRadius = 0.dp, outlineWidth = 1.dp,
     frame = Color(0xFF3A3A44), panel = Color(0xFF0D0D10), maximal = true,
 )
 
@@ -347,7 +346,7 @@ private val MaximalLightTokens = AwareTokens(
         Color(0xFF8ACC00), Color(0xFFFF2EC8), Color(0xFF0090C4),
         Color(0xFF7C22DB), Color(0xFFE06A00), Color(0xFF00A85C),
     ),
-    cardRadius = 0.dp, heroRadius = 0.dp, chipRadius = 0.dp, outlineWidth = 1.dp, glow = 10.dp,
+    cardRadius = 0.dp, heroRadius = 0.dp, chipRadius = 0.dp, outlineWidth = 1.dp,
     frame = Color(0xFF23232A), panel = Color(0xFFF4F4F7), maximal = true,
 )
 

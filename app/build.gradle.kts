@@ -77,6 +77,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.9.5")
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+    implementation("androidx.glance:glance-material3:1.2.0")
 
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")

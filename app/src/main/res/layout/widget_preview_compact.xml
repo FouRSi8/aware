@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="aware       15 Sep" android:textColor="#26362F" android:textSize="13sp" android:textStyle="bold" />
+    <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="SAFE TO SPEND" android:textColor="#77756E" android:textSize="8sp" android:textStyle="bold" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="₹24.8k" android:textColor="#26362F" android:textSize="24sp" android:textStyle="bold" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="16 days left" android:textColor="#77756E" android:textSize="9sp" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/widget_preview_accent" android:paddingHorizontal="12dp" android:paddingVertical="8dp" android:text="＋  expense" android:textColor="#26362F" android:textSize="10sp" android:textStyle="bold" />
+</LinearLayout>

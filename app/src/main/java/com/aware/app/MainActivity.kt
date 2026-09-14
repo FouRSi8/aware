@@ -61,6 +61,9 @@ import com.aware.app.update.AppUpdater
 import com.aware.app.update.UpdateCheckResult
 import com.aware.app.update.UpdateCheckWorker
 import com.aware.app.statement.StatementImportParser
+import com.aware.app.data.TransactionType
+import com.aware.app.widget.AwareWidgets
+import com.aware.app.widget.EXTRA_WIDGET_ADD_TYPE
 import java.io.ByteArrayOutputStream
 
 class MainActivity : FragmentActivity() {
@@ -69,6 +72,7 @@ class MainActivity : FragmentActivity() {
     private var launcherSkin = Skin.COZY
     private var launcherCozyPalette = CozyPalette.OAT_GARDEN
     private var incomingUpdateCheck by mutableStateOf(false)
+    private var incomingWidgetAdd by mutableStateOf<TransactionType?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -216,6 +220,7 @@ class MainActivity : FragmentActivity() {
                     onAppearanceChange = {
                         appearance = it
                         appearancePrefs.edit().putString("mode_key", it.key).apply()
+                        scope.launch(Dispatchers.IO) { AwareWidgets.refresh(this@MainActivity) }
                     },
                     skin = skin,
                     onSkinChange = { next ->
@@ -230,12 +235,14 @@ class MainActivity : FragmentActivity() {
                             editor.putString("mode_key", Appearance.DARK.key)
                         }
                         editor.apply()
+                        scope.launch(Dispatchers.IO) { AwareWidgets.refresh(this@MainActivity) }
                     },
                     cozyPalette = cozyPalette,
                     onCozyPaletteChange = { next ->
                         cozyPalette = next
                         launcherCozyPalette = next
                         appearancePrefs.edit().putString("cozy_palette_key", next.key).apply()
+                        scope.launch(Dispatchers.IO) { AwareWidgets.refresh(this@MainActivity) }
                     },
                     viewModel = viewModel,
                     selfUpdateEnabled = BuildConfig.SELF_UPDATE_ENABLED,
@@ -247,6 +254,7 @@ class MainActivity : FragmentActivity() {
                             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                             unlocked = true
                         }
+                        scope.launch(Dispatchers.IO) { AwareWidgets.refresh(this@MainActivity) }
                     },
                     onExportCsv = {
                         scope.launch {
@@ -311,6 +319,8 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissUpdate = { if (!updateBusy) showUpdatePanel = false },
+                    quickAddType = incomingWidgetAdd,
+                    onQuickAddConsumed = { incomingWidgetAdd = null },
                     ) else PrivateLockScreen(onUnlock = ::requestUnlock)
                 }
             }
@@ -331,6 +341,8 @@ class MainActivity : FragmentActivity() {
 
     private fun consumeLaunchIntent(intent: Intent?) {
         incomingUpdateCheck = intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_OPEN_UPDATE, false) == true
+        incomingWidgetAdd = intent?.getStringExtra(EXTRA_WIDGET_ADD_TYPE)
+            ?.let { value -> TransactionType.entries.firstOrNull { it.name == value } }
     }
 
     override fun onResume() {

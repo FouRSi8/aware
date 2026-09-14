@@ -16,6 +16,9 @@ import com.aware.app.data.RecurringWorker
 import com.aware.app.ai.GroqCategorySuggester
 import com.aware.app.data.BudgetAlertWorker
 import com.aware.app.update.UpdateCheckWorker
+import com.aware.app.widget.AwareWidgets
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 
 class AwareApplication : Application() {
     lateinit var container: AppContainer
@@ -39,6 +42,14 @@ class AwareApplication : Application() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             container.repository.ensureStarterStructure()
             container.repository.materializeDueRecurring()
+        }
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            combine(
+                container.repository.dashboard(),
+                container.repository.transactions,
+                container.repository.budgets(),
+            ) { _, _, _ -> Unit }
+                .collectLatest { AwareWidgets.refresh(this@AwareApplication) }
         }
         RecurringWorker.schedule(this)
         BudgetAlertWorker.schedule(this)

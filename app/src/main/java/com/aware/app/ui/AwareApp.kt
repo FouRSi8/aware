@@ -150,7 +150,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import com.aware.app.BuildConfig
 import com.aware.app.update.AppRelease
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
@@ -291,6 +290,8 @@ fun AwareApp(
     onCheckForUpdates: () -> Unit,
     onInstallUpdate: (AppRelease) -> Unit,
     onDismissUpdate: () -> Unit,
+    quickAddType: TransactionType? = null,
+    onQuickAddConsumed: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val groqConfigured by viewModel.groqConfigured.collectAsState()
@@ -331,6 +332,13 @@ fun AwareApp(
         viewModel.messages.collect { message -> snackbarHostState.showSnackbar(message) }
     }
     LaunchedEffect(restoreReady) { if (restoreReady) showRestorePassword = true }
+    LaunchedEffect(quickAddType) {
+        quickAddType?.let { requested ->
+            selected = Tab.HOME
+            addType = requested
+            onQuickAddConsumed()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -811,11 +819,12 @@ private fun PremiumBottomBar(selected: Tab, onSelected: (Tab) -> Unit, onAdd: ()
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).navigationBarsPadding().height(88.dp),
     ) {
         val barShape = RoundedCornerShape(if (t.maximal) 0.dp else 24.dp)
+        val darkChrome = MaterialTheme.colorScheme.background.luminance() < .5f
         Surface(
             Modifier.fillMaxWidth().padding(top = 18.dp).height(54.dp)
                 .padding(horizontal = if (t.maximal) 0.dp else 18.dp),
             shape = barShape, color = t.navBar,
-            shadowElevation = if (t.maximal) 0.dp else 8.dp,
+            shadowElevation = if (t.maximal || darkChrome) 0.dp else 8.dp,
             border = if (t.maximal) BorderStroke(t.outlineWidth, t.frame) else null,
         ) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -879,8 +888,6 @@ private fun PremiumBottomBar(selected: Tab, onSelected: (Tab) -> Unit, onAdd: ()
         Surface(
             modifier = Modifier.size(56.dp).align(Alignment.TopCenter)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
-                .shadow(if (t.glow > 0.dp) t.glow else 6.dp, addShape, ambientColor = t.accent, spotColor = t.accent)
-                .border(3.dp, MaterialTheme.colorScheme.background, addShape)
                 .clickable(interactionSource = interaction, indication = null) {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onAdd()
