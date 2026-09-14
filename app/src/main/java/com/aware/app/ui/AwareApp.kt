@@ -1,5 +1,6 @@
 package com.aware.app.ui
 
+import android.animation.ValueAnimator
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -162,10 +163,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
@@ -767,6 +771,42 @@ private fun ChoiceCard(
 private fun PremiumBottomBar(selected: Tab, onSelected: (Tab) -> Unit, onAdd: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val t = LocalTokens.current
+    val destinations = remember { listOf(Tab.HOME, Tab.INSIGHTS, Tab.PLAN, Tab.SETTINGS) }
+    val activeIndex = destinations.indexOf(selected)
+    val initialIndex = activeIndex.coerceAtLeast(0)
+    val slide = remember { Animatable(initialIndex.toFloat()) }
+    val stretch = remember { Animatable(1f) }
+    val previousIndex = remember { intArrayOf(initialIndex) }
+    val animationsEnabled = ValueAnimator.areAnimatorsEnabled()
+
+    LaunchedEffect(activeIndex, animationsEnabled) {
+        // Activity is intentionally push-only. Keep the drop under the tab that
+        // opened it instead of inventing a fifth destination.
+        if (activeIndex < 0) return@LaunchedEffect
+
+        val distance = kotlin.math.abs(activeIndex - previousIndex[0])
+        previousIndex[0] = activeIndex
+        if (!animationsEnabled || distance == 0) {
+            slide.snapTo(activeIndex.toFloat())
+            stretch.snapTo(1f)
+            return@LaunchedEffect
+        }
+
+        val peak = 1f + kotlin.math.min(distance, 3) * .16f
+        kotlinx.coroutines.coroutineScope {
+            launch {
+                slide.animateTo(
+                    activeIndex.toFloat(),
+                    spring(dampingRatio = .72f, stiffness = 430f),
+                )
+            }
+            launch {
+                stretch.animateTo(peak, tween(120, easing = FastOutSlowInEasing))
+                stretch.animateTo(1f, spring(dampingRatio = .42f, stiffness = 360f))
+            }
+        }
+    }
+
     Box(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).navigationBarsPadding().height(88.dp),
     ) {
@@ -778,12 +818,54 @@ private fun PremiumBottomBar(selected: Tab, onSelected: (Tab) -> Unit, onAdd: ()
             shadowElevation = if (t.maximal) 0.dp else 8.dp,
             border = if (t.maximal) BorderStroke(t.outlineWidth, t.frame) else null,
         ) {
-            Row(Modifier.fillMaxSize().padding(horizontal = if (t.maximal) 14.dp else 6.dp)) {
-                BottomDestination(Tab.HOME, selected, haptics, onSelected, Modifier.weight(1f))
-                BottomDestination(Tab.INSIGHTS, selected, haptics, onSelected, Modifier.weight(1f))
-                Spacer(Modifier.width(72.dp))
-                BottomDestination(Tab.PLAN, selected, haptics, onSelected, Modifier.weight(1f))
-                BottomDestination(Tab.SETTINGS, selected, haptics, onSelected, Modifier.weight(1f))
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val density = LocalDensity.current
+                val horizontalPadding = if (t.maximal) 14.dp else 6.dp
+                val addGap = 72.dp
+                val slotWidth = (maxWidth - horizontalPadding * 2 - addGap) / destinations.size
+                val dropWidth = maxOf(40.dp, slotWidth - 8.dp)
+                val centers = remember(maxWidth, horizontalPadding, slotWidth) {
+                    listOf(
+                        horizontalPadding + slotWidth * .5f,
+                        horizontalPadding + slotWidth * 1.5f,
+                        horizontalPadding + addGap + slotWidth * 2.5f,
+                        horizontalPadding + addGap + slotWidth * 3.5f,
+                    )
+                }
+                val centersPx = remember(centers, density) {
+                    centers.map { center -> with(density) { center.toPx() } }
+                }
+                val dropWidthPx = with(density) { dropWidth.toPx() }
+                val dropShape = RoundedCornerShape(if (t.maximal) 8.dp else 19.dp)
+
+                Box(
+                    Modifier.width(dropWidth).height(38.dp)
+                        .graphicsLayer {
+                            // Reading Animatable values inside the layer block
+                            // invalidates drawing only, not the entire bar layout.
+                            val position = slide.value.coerceIn(0f, destinations.lastIndex.toFloat())
+                            val lowerIndex = position.toInt().coerceAtMost(destinations.lastIndex)
+                            val upperIndex = (lowerIndex + 1).coerceAtMost(destinations.lastIndex)
+                            val fraction = position - lowerIndex
+                            val centerPx = centersPx[lowerIndex] +
+                                (centersPx[upperIndex] - centersPx[lowerIndex]) * fraction
+                            val currentStretch = stretch.value
+                            translationX = centerPx - dropWidthPx / 2f
+                            translationY = with(density) { 8.dp.toPx() }
+                            scaleX = currentStretch
+                            scaleY = (1f - (currentStretch - 1f) * .28f).coerceIn(.82f, 1.08f)
+                        }
+                        .clip(dropShape)
+                        .background(t.navPill),
+                )
+
+                Row(Modifier.fillMaxSize().padding(horizontal = horizontalPadding)) {
+                    BottomDestination(Tab.HOME, selected, haptics, onSelected, Modifier.weight(1f))
+                    BottomDestination(Tab.INSIGHTS, selected, haptics, onSelected, Modifier.weight(1f))
+                    Spacer(Modifier.width(addGap))
+                    BottomDestination(Tab.PLAN, selected, haptics, onSelected, Modifier.weight(1f))
+                    BottomDestination(Tab.SETTINGS, selected, haptics, onSelected, Modifier.weight(1f))
+                }
             }
         }
         val interaction = remember { MutableInteractionSource() }
@@ -829,13 +911,10 @@ private fun BottomDestination(
         if (active) t.onNavPill else t.navIdle,
         tween(180), label = "tab-color-${tab.name}",
     )
-    val pillColor by animateColorAsState(
-        if (active) t.navPill else Color.Transparent,
-        tween(180), label = "tab-pill-${tab.name}",
-    )
     Box(
         modifier.fillMaxHeight()
-            .clickable(interactionSource = interaction, indication = null) {
+            .semantics { this.selected = active }
+            .clickable(interactionSource = interaction, indication = null, role = Role.Tab) {
             if (!active) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onSelected(tab)
         },
@@ -843,8 +922,7 @@ private fun BottomDestination(
     ) {
         Box(
             Modifier.width(46.dp).height(38.dp)
-                .clip(RoundedCornerShape(if (t.maximal) 0.dp else 13.dp))
-                .background(pillColor),
+                .clip(RoundedCornerShape(if (t.maximal) 0.dp else 13.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/tree/main"><img alt="Latest version 1.6.1" src="https://img.shields.io/badge/latest-v1.6.1-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/releases/latest"><img alt="Latest version 1.6.2" src="https://img.shields.io/badge/latest-v1.6.2-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -78,6 +78,17 @@ an analytics company or requiring an account.
   unresolved-cash warnings, and an expanded month report turn the ledger into
   concrete next-month decisions.
 
+### Water-drop navigation in v1.6.2
+
+- A single highlight now flows between bottom destinations instead of fading
+  separate per-tab pills.
+- The drop stretches according to travel distance, narrows vertically to
+  preserve visual volume, and settles with a controlled spring.
+- Animation values update in the graphics layer to avoid relaying out the bar
+  on every frame; Android's reduced-motion setting disables the effect.
+- Activity remains a push-style destination, the center add action stays fixed,
+  and every visible destination exposes proper selected-tab semantics.
+
 ### Two complete visual identities
 
 - **Cozy** — warm paper, espresso ink, garden pastels, quiet geometry, and
@@ -104,10 +115,10 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest development version: v1.6.1.** The newest source is always on
-> [`main`](https://github.com/FouRSi8/aware/tree/main). This update removes SMS
-> reception, payment-notification access, automatic transaction prompts, and the
-> home-screen widget. Manual entry and review-first statement import remain.
+> **Latest development version: v1.6.2.** The newest source is always on
+> [`main`](https://github.com/FouRSi8/aware/tree/main). This update adds native
+> water-drop bottom navigation with GPU-layer motion and reduced-motion support.
+> Manual entry and review-first statement import remain.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps;

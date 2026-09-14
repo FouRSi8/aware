@@ -13,8 +13,8 @@ android {
         applicationId = "com.aware.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.6.1"
+        versionCode = 21
+        versionName = "1.6.2"
         multiDexEnabled = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -53,6 +53,11 @@ android {
         compose = true
         buildConfig = true
     }
+
+    sourceSets {
+        getByName("androidTest").assets.directories.add("$projectDir/schemas")
+    }
+
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
 }
 
