@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/releases/latest"><img alt="Latest version 1.6.2" src="https://img.shields.io/badge/latest-v1.6.2-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/releases/latest"><img alt="Latest version 1.6.3" src="https://img.shields.io/badge/latest-v1.6.3-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -123,7 +123,7 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest development version: v1.6.2.** The newest source is always on
+> **Latest development version: v1.6.3.** The newest source is always on
 > [`main`](https://github.com/FouRSi8/aware/tree/main). This update adds native
 > water-drop bottom navigation plus three privacy-safe home-screen widgets with
 > responsive amount sizing, theme-aware styling, and direct expense/income entry.
