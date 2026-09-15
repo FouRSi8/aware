@@ -10,6 +10,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import com.aware.app.backup.BackupPayload
 import com.aware.app.backup.BackupCodec
+import com.aware.app.ai.MerchantCategorizer
 
 class AwareRepository(
     private val database: AppDatabase,
@@ -20,6 +21,7 @@ class AwareRepository(
     val transactions = database.transactionDao().observeAll()
     val recurring = database.recurringDao().observeActive()
     val savingsGoals = database.savingsGoalDao().observeActive()
+    val merchantRules = database.merchantRuleDao().observeAll()
 
     fun monthlyPlan(month: YearMonth = YearMonth.now()): Flow<MonthlyPlanEntity?> =
         database.monthlyPlanDao().observe(month.toString())
@@ -75,16 +77,27 @@ class AwareRepository(
         database.categoryDao().insertAll(defaults)
     }
 
-    suspend fun addTransaction(item: TransactionEntity): Long = database.transactionDao().insert(item)
+    suspend fun addTransaction(item: TransactionEntity): Long = database.withTransaction {
+        val id = database.transactionDao().insert(item)
+        if (id > 0) learnMerchant(item.copy(id = id))
+        id
+    }
     suspend fun importTransactions(items: List<TransactionEntity>): ImportResult = database.withTransaction {
         var added = 0
         var duplicates = 0
         items.forEach { item ->
-            if (database.transactionDao().insert(item) > 0) added++ else duplicates++
+            val id = database.transactionDao().insert(item)
+            if (id > 0) {
+                added++
+                learnMerchant(item.copy(id = id))
+            } else duplicates++
         }
         ImportResult(added, duplicates)
     }
-    suspend fun updateTransaction(item: TransactionEntity) = database.transactionDao().update(item)
+    suspend fun updateTransaction(item: TransactionEntity) = database.withTransaction {
+        database.transactionDao().update(item)
+        learnMerchant(item)
+    }
     suspend fun deleteTransaction(id: Long) {
         database.transactionDao().byId(id)?.let { database.transactionDao().delete(it) }
     }
@@ -113,6 +126,24 @@ class AwareRepository(
             database.categoryDao().update(item)
             item.id
         }
+    }
+
+    private suspend fun learnMerchant(item: TransactionEntity) {
+        val categoryId = item.categoryId ?: return
+        if (item.type == TransactionType.TRANSFER || item.type == TransactionType.ADJUSTMENT) return
+        val normalized = MerchantCategorizer.normalize(item.merchant)
+        if (normalized.length < 2 || normalized in GENERIC_MERCHANTS) return
+        val dao = database.merchantRuleDao()
+        val existing = dao.find(normalized)
+        dao.upsert(
+            MerchantRuleEntity(
+                id = existing?.id ?: 0,
+                normalizedMerchant = normalized,
+                displayMerchant = item.merchant.trim().take(80),
+                categoryId = categoryId,
+                accountId = item.accountId,
+            ),
+        )
     }
     suspend fun addBudget(item: BudgetBucketEntity) = database.budgetDao().upsert(item)
     suspend fun deleteBudget(item: BudgetBucketEntity) = database.budgetDao().delete(item)
@@ -201,6 +232,10 @@ class AwareRepository(
     }
 
     data class ImportResult(val added: Int, val duplicates: Int)
+
+    companion object {
+        private val GENERIC_MERCHANTS = setOf("expense", "income", "refund", "transaction", "unknown")
+    }
 
     data class BudgetAlert(val budgetId: Long, val monthKey: String, val name: String, val percent: Int, val spentPaise: Long, val capPaise: Long)
 

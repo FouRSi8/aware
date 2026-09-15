@@ -5,8 +5,8 @@ advertising, analytics, or cloud synchronization.
 
 ## Transaction entry
 
-aware does not request SMS access, read payment-app notifications, or provide a
-home-screen widget. Transactions enter the ledger only when the user records them
+aware does not request SMS access or read payment-app notifications. Its home-screen
+widgets display aggregates already stored in the private ledger. Transactions enter the ledger only when the user records them
 manually, confirms a recurring item, or explicitly imports selected bank-statement
 rows.
 
@@ -31,11 +31,21 @@ intentionally unencrypted and is clearly labelled before export.
 
 ## Optional AI categorisation
 
-AI is optional and never determines amount or debit/credit direction. When a
-user supplies a Groq key, aware may send redacted merchant context and category
-choices. It does not send statement contents, account numbers, UPI IDs, phone numbers,
-transaction references, balances, statement files, or statement passwords. Groq
-never determines an imported amount or whether it is a debit or credit.
+Categorisation is local-first and never determines amount or debit/credit
+direction. aware learns merchant-to-category mappings only after the user saves
+or imports a reviewed transaction. Those rules, transaction-history matching,
+and built-in merchant hints remain on the device.
+
+Monthly forecasts, savings guidance, spending-pattern explanations, and the aware
+coach are calculated entirely on the device and never call an AI service.
+
+Groq is an optional fallback for entries that local matching cannot classify. When
+a user supplies a Groq key, aware may send unresolved merchants during manual save
+or explicit statement auto-categorisation. Requests contain only redacted merchant
+words and the user's category names and are batched during statement review.
+It does not send statement contents, amounts, account numbers, UPI IDs, phone
+numbers, transaction references, balances, statement files, or statement
+passwords. Every returned category is validated locally before it is displayed.
 
 ## App updates
 

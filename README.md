@@ -12,7 +12,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-312B27?style=flat-square&logo=kotlin&logoColor=C9BED8" />
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-312B27?style=flat-square&logo=gnu&logoColor=F0C38E" />
   <img alt="Offline first" src="https://img.shields.io/badge/offline-first-312B27?style=flat-square&logo=shield&logoColor=BFD7DC" />
-  <a href="https://github.com/FouRSi8/aware/releases/latest"><img alt="Latest version 1.6.3" src="https://img.shields.io/badge/latest-v1.6.3-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
+  <a href="https://github.com/FouRSi8/aware/releases/latest"><img alt="Latest version 1.7.0" src="https://img.shields.io/badge/latest-v1.7.0-312B27?style=flat-square&logo=github&logoColor=D9E8B5" /></a>
 </p>
 
 <p align="center">
@@ -61,9 +61,20 @@ an analytics company or requiring an account.
 | Manual expense, income, transfer, refund, and adjustment entry | Today, week, month, and custom-period views | Overall, category, account, and payee budgets |
 | Editable dates for backfilling transactions | Category, payee, and tag breakdowns | Daily, weekly, monthly, yearly, and one-time periods |
 | Review-first statement import with duplicate checks | Weekly spending, income, net movement, and top merchant | Expected recurring income and expenses |
-| Local debit/credit and balance reconciliation | Largest spending days and month comparison | Merchant rules and category learning |
-| Review-first CSV, XLS, and password-protected XLSX statement import | Debit/credit and running-balance reconciliation | Optional, redacted Groq category suggestions |
+| Local debit/credit and balance reconciliation | Largest spending days and month comparison | Offline merchant rules and confidence-gated category learning |
+| Review-first CSV, XLS, and password-protected XLSX statement import | Debit/credit and running-balance reconciliation | One-batch, redacted Groq fallback for unresolved merchants |
 | Editable expense, income, transfer, and refund entries | Bank-to-cash transfers stay out of spending | Custom accounts, categories, payees, and tags |
+
+### Private intelligence in v1.7
+
+- **aware coach** turns the current ledger into a month-end spending forecast,
+  projected savings rate, safe daily allowance, and a ranked set of concrete actions.
+- It explains the strongest discretionary leak, highlights repeated merchants and
+  food-delivery frequency, and estimates a realistic amount the user could retain.
+- Four conversational prompts answer where money is going, whether savings are on
+  track, what to change, and what is safe to spend today—entirely on-device.
+- Manual entry and statement import use learned merchant rules locally first.
+  Optional Groq fallback sees only unresolved, redacted merchant words and category names.
 
 ### Savings control in v1.6
 
@@ -123,11 +134,10 @@ Read the complete [privacy note](PRIVACY.md).
 
 ## Download
 
-> **Latest development version: v1.6.3.** The newest source is always on
-> [`main`](https://github.com/FouRSi8/aware/tree/main). This update adds native
-> water-drop bottom navigation plus three privacy-safe home-screen widgets with
-> responsive amount sizing, theme-aware styling, and direct expense/income entry.
-> Manual entry and review-first statement import remain.
+> **Latest development version: v1.7.0.** The newest source is always on
+> [`main`](https://github.com/FouRSi8/aware/tree/main). This release adds private
+> on-device coaching, month-end and savings forecasts, concrete spending actions,
+> local merchant learning, and an optional redacted Groq fallback.
 
 The newest personal-testing APK will be attached to the repository's
 **Releases** page. Android may warn about sideloaded apps;

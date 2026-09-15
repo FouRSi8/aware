@@ -20,8 +20,11 @@ import com.aware.app.data.TransactionType
 import com.aware.app.data.IncomeKind
 import com.aware.app.data.ExpenseNature
 import com.aware.app.data.MonthlyPlanEntity
+import com.aware.app.data.MerchantRuleEntity
 import com.aware.app.data.SavingsGoalEntity
 import com.aware.app.ai.GroqCategorySuggester
+import com.aware.app.ai.GroqCategoryInput
+import com.aware.app.ai.MerchantCategorizer
 import com.aware.app.statement.IncorrectStatementPasswordException
 import com.aware.app.statement.StatementCandidate
 import com.aware.app.statement.StatementImportParser
@@ -54,6 +57,7 @@ data class MainUiState(
     val recurring: List<RecurringRuleEntity> = emptyList(),
     val monthlyPlan: MonthlyPlanEntity? = null,
     val savingsGoals: List<SavingsGoalEntity> = emptyList(),
+    val merchantRules: List<MerchantRuleEntity> = emptyList(),
 )
 
 data class StatementReviewRow(
@@ -105,7 +109,7 @@ class MainViewModel(
 
     val state: StateFlow<MainUiState> = combine(
         repository.dashboard(), repository.accounts, repository.categories, repository.transactions,
-        repository.budgets(), repository.recurring, repository.monthlyPlan(), repository.savingsGoals,
+        repository.budgets(), repository.recurring, repository.monthlyPlan(), repository.savingsGoals, repository.merchantRules,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         MainUiState(
@@ -117,6 +121,7 @@ class MainViewModel(
             recurring = values[5] as List<RecurringRuleEntity>,
             monthlyPlan = values[6] as MonthlyPlanEntity?,
             savingsGoals = values[7] as List<SavingsGoalEntity>,
+            merchantRules = values[8] as List<MerchantRuleEntity>,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
@@ -216,11 +221,7 @@ class MainViewModel(
         review.copy(rows = review.rows.map { row -> if (row.source.rowNumber == rowNumber) row.copy(destinationAccountId = accountId) else row })
     }
 
-    fun categoriseStatementWithGroq() = viewModelScope.launch {
-        if (!categorySuggester.configured()) {
-            messageEvents.emit("Add a Groq key before using AI categorisation")
-            return@launch
-        }
+    fun categoriseStatement() = viewModelScope.launch {
         val current = (statementImportState.value as? StatementImportUiState.Reviewing)?.review ?: return@launch
         val targets = current.rows.filter { it.selected && it.categoryId == null && it.type != TransactionType.TRANSFER }.take(MAX_AI_IMPORT_ROWS)
         if (targets.isEmpty()) {
@@ -228,23 +229,39 @@ class MainViewModel(
             return@launch
         }
         statementImportState.value = StatementImportUiState.Reviewing(current.copy(aiBusy = true))
-        var matched = 0
-        targets.forEach { target ->
-            val isIncome = target.type == TransactionType.INCOME || target.type == TransactionType.REFUND
-            val allowed = state.value.categories.filter { it.isIncome == isIncome }.map { it.name }
-            val suggestion = categorySuggester.suggest(target.source.merchant, allowed)
-            val categoryId = suggestion?.let { name ->
-                state.value.categories.firstOrNull {
-                    it.isIncome == isIncome && it.name.equals(name, ignoreCase = true)
-                }?.id
-            }
-            if (categoryId != null) {
-                matched++
-                setStatementCategory(target.source.rowNumber, categoryId)
-            }
+        val snapshot = state.value
+        val localMatches = targets.mapNotNull { target ->
+            localCategory(target.source.merchant, target.type)?.let { target.source.rowNumber to it }
+        }.toMap()
+        val unresolved = targets.filterNot { it.source.rowNumber in localMatches }
+        val cloudMatches = if (unresolved.isNotEmpty() && categorySuggester.configured()) {
+            val cloudSuggestions = categorySuggester.suggestBatch(
+                rows = unresolved.map { row ->
+                    GroqCategoryInput(row.source.rowNumber, row.source.merchant, categoryUsesIncomeList(row.type))
+                },
+                expenseCategories = snapshot.categories.filterNot(CategoryEntity::isIncome).map(CategoryEntity::name),
+                incomeCategories = snapshot.categories.filter(CategoryEntity::isIncome).map(CategoryEntity::name),
+            )
+            cloudSuggestions.mapNotNull { (rowId, categoryName) ->
+                val row = unresolved.firstOrNull { it.source.rowNumber == rowId } ?: return@mapNotNull null
+                snapshot.categories.firstOrNull {
+                    it.isIncome == categoryUsesIncomeList(row.type) && it.name.equals(categoryName, ignoreCase = true)
+                }?.id?.let { rowId to it }
+            }.toMap()
+        } else emptyMap()
+        val matches = localMatches + cloudMatches
+        updateStatementReview { review ->
+            review.copy(
+                aiBusy = false,
+                rows = review.rows.map { row -> row.copy(categoryId = matches[row.source.rowNumber] ?: row.categoryId) },
+            )
         }
-        updateStatementReview { it.copy(aiBusy = false) }
-        messageEvents.emit("Groq suggested $matched ${if (matched == 1) "category" else "categories"}")
+        val stillUnresolved = unresolved.size - cloudMatches.size
+        messageEvents.emit(buildString {
+            append(localMatches.size).append(" matched locally")
+            if (categorySuggester.configured()) append(" · ").append(cloudMatches.size).append(" by Groq")
+            if (stillUnresolved > 0) append(" · ").append(stillUnresolved).append(" need review")
+        })
     }
 
     fun importReviewedStatement() = viewModelScope.launch {
@@ -302,6 +319,7 @@ class MainViewModel(
         linkedTransactionId: Long?,
         occurredAt: Long = System.currentTimeMillis(),
     ) = launchMutation("Couldn’t add the transaction", "Transaction added") {
+        val resolvedCategory = resolveCategory(merchant, type, categoryId)
         repository.addTransaction(
             TransactionEntity(
                 amountPaise = amountPaise,
@@ -310,7 +328,7 @@ class MainViewModel(
                 status = TransactionStatus.POSTED,
                 accountId = accountId,
                 destinationAccountId = destinationAccountId,
-                categoryId = categoryId,
+                categoryId = resolvedCategory.takeUnless { type == TransactionType.TRANSFER },
                 merchant = merchant.ifBlank { type.name.lowercase().replaceFirstChar(Char::uppercase) },
                 note = note,
                 tags = tags.split(',').map(String::trim).filter(String::isNotBlank).distinct().joinToString(","),
@@ -319,6 +337,20 @@ class MainViewModel(
                 linkedTransactionId = linkedTransactionId.takeIf { type == TransactionType.REFUND },
             ),
         )
+    }
+
+    private suspend fun resolveCategory(merchant: String, type: TransactionType, selected: Long?): Long? {
+        if (selected != null || type in setOf(TransactionType.TRANSFER, TransactionType.ADJUSTMENT) || merchant.isBlank()) return selected
+        localCategory(merchant, type)?.let { return it }
+        if (!categorySuggester.configured()) return null
+        val snapshot = state.value
+        val incomeList = categoryUsesIncomeList(type)
+        val name = categorySuggester.suggestBatch(
+            rows = listOf(GroqCategoryInput(0, merchant, incomeList)),
+            expenseCategories = snapshot.categories.filterNot(CategoryEntity::isIncome).map(CategoryEntity::name),
+            incomeCategories = snapshot.categories.filter(CategoryEntity::isIncome).map(CategoryEntity::name),
+        )[0] ?: return null
+        return snapshot.categories.firstOrNull { it.isIncome == incomeList && it.name.equals(name, true) }?.id
     }
 
     fun deleteTransaction(id: Long) = launchMutation("Couldn’t delete the transaction", "Transaction deleted") {
@@ -568,24 +600,18 @@ class MainViewModel(
         .toSet()
 
     private fun localCategory(merchant: String, type: TransactionType): Long? {
-        val income = type == TransactionType.INCOME || type == TransactionType.REFUND
-        val available = state.value.categories.filter { it.isIncome == income }
-        val text = merchant.lowercase(Locale.ROOT)
-        val preferred = if (income) {
-            if (listOf("salary", "payroll", "wages").any(text::contains)) "Salary" else "Other income"
-        } else when {
-            listOf("swiggy", "zomato", "food delivery").any(text::contains) -> "Food delivery"
-            listOf("grocery", "groceries", "supermarket", "bigbasket", "blinkit", "zepto").any(text::contains) -> "Groceries"
-            listOf("restaurant", "cafe", "coffee", "dining").any(text::contains) -> "Dining"
-            listOf("uber", "ola", "metro", "rail", "flight", "petrol", "fuel").any(text::contains) -> "Travel"
-            listOf("amazon", "flipkart", "myntra", "shopping").any(text::contains) -> "Shopping"
-            listOf("netflix", "spotify", "subscription", "prime video").any(text::contains) -> "Subscriptions"
-            listOf("hospital", "pharma", "medical", "clinic", "doctor").any(text::contains) -> "Health"
-            listOf("school", "tuition", "course", "university", "education", "book").any(text::contains) -> "Education"
-            else -> return null
-        }
-        return available.firstOrNull { it.name.equals(preferred, ignoreCase = true) }?.id
+        val snapshot = state.value
+        return MerchantCategorizer.suggest(
+            merchant = merchant,
+            isIncome = categoryUsesIncomeList(type),
+            categories = snapshot.categories,
+            rules = snapshot.merchantRules,
+            history = snapshot.transactions,
+        )?.takeIf { it.confidence >= MerchantCategorizer.AUTO_APPLY_CONFIDENCE }?.categoryId
     }
+
+    private fun categoryUsesIncomeList(type: TransactionType): Boolean =
+        type == TransactionType.INCOME || type == TransactionType.REFUND
 
     private fun inferIncomeKind(merchant: String, type: TransactionType): IncomeKind? = when {
         type != TransactionType.INCOME -> null

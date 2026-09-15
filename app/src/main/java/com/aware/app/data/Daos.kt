@@ -165,6 +165,7 @@ interface RecurringDao {
 
 @Dao
 interface MerchantRuleDao {
+    @Query("SELECT * FROM merchant_rules ORDER BY updatedAt DESC") fun observeAll(): Flow<List<MerchantRuleEntity>>
     @Query("SELECT * FROM merchant_rules ORDER BY id") suspend fun allOnce(): List<MerchantRuleEntity>
     @Query("SELECT * FROM merchant_rules WHERE normalizedMerchant = :merchant LIMIT 1") suspend fun find(merchant: String): MerchantRuleEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(rule: MerchantRuleEntity): Long

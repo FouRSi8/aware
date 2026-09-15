@@ -193,6 +193,8 @@ import com.aware.app.data.TransactionEntity
 import com.aware.app.data.TransactionType
 import com.aware.app.data.IncomeKind
 import com.aware.app.data.ExpenseNature
+import com.aware.app.data.FinanceCoach
+import com.aware.app.data.FinanceCoachSnapshot
 import com.aware.app.data.SavingsGoalEntity
 import com.aware.app.ui.theme.Appearance
 import com.aware.app.ui.theme.CozyPalette
@@ -317,6 +319,7 @@ fun AwareApp(
     var showBackupPassword by remember { mutableStateOf(false) }
     var showRestorePassword by remember { mutableStateOf(false) }
     var showMonthlyReport by remember { mutableStateOf(false) }
+    var showMoneyCoach by remember { mutableStateOf(false) }
     var showMoneyMoveChooser by remember { mutableStateOf(false) }
     var showOpenSourceNotice by remember { mutableStateOf(false) }
     var showStorage by remember { mutableStateOf(false) }
@@ -381,6 +384,7 @@ fun AwareApp(
                     onOpenPlan = { selected = Tab.PLAN },
                     onOpenAiSetup = { showGroqKey = true },
                     onOpenMonthlyReport = { showMonthlyReport = true },
+                    onOpenMoneyCoach = { showMoneyCoach = true },
                     onOpenSettings = { selected = Tab.SETTINGS },
                     onOpenTransaction = { selectedTransaction = it },
                     modifier = Modifier.padding(padding),
@@ -629,6 +633,7 @@ fun AwareApp(
     if (showBackupPassword) PasswordDialog("Encrypt backup", "Use at least 8 characters. You will need this password to restore.", { showBackupPassword = false }) { onCreateBackup(it); showBackupPassword = false }
     if (showRestorePassword) PasswordDialog("Restore aware", "Enter the password used when this backup was created. Existing ledger data will be replaced.", { showRestorePassword = false }) { onRestore(it); showRestorePassword = false }
     if (showMonthlyReport) MonthlyReportDialog(state) { showMonthlyReport = false }
+    if (showMoneyCoach) MoneyCoachDialog(state) { showMoneyCoach = false }
     if (showOpenSourceNotice) OpenSourceNoticeDialog { showOpenSourceNotice = false }
     if (showStorage) StorageDialog { showStorage = false }
     when (val currentImport = statementImport) {
@@ -652,7 +657,7 @@ fun AwareApp(
             onType = viewModel::setStatementType,
             onCategory = viewModel::setStatementCategory,
             onDestination = viewModel::setStatementDestination,
-            onGroq = viewModel::categoriseStatementWithGroq,
+            onCategorise = viewModel::categoriseStatement,
             onAddCategory = { showCategoryForIncome = it },
             onImport = viewModel::importReviewedStatement,
         )
@@ -1751,6 +1756,7 @@ private fun InsightsScreen(
     onOpenPlan: () -> Unit,
     onOpenAiSetup: () -> Unit,
     onOpenMonthlyReport: () -> Unit,
+    onOpenMoneyCoach: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenTransaction: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier,
@@ -1779,6 +1785,9 @@ private fun InsightsScreen(
     val bars = remember(expenses, period) { insightBars(expenses, period) }
     val categoriesById = remember(state.categories) { state.categories.associateBy { it.id } }
     val accountsById = remember(state.accounts) { state.accounts.associateBy { it.id } }
+    val coach = remember(state.transactions, state.categories, state.budgets, state.monthlyPlan) {
+        FinanceCoach.analyse(state.transactions, state.categories, state.budgets, state.monthlyPlan)
+    }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp)) {
         item {
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 14.dp)) {
@@ -1819,6 +1828,7 @@ private fun InsightsScreen(
                 }
             }
         }
+        item { MoneyCoachCard(coach, onOpenMoneyCoach) }
         item { FoodControlCard(expenses, state, period) }
         item { AwareBarChart(bars, Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
         item {
@@ -1902,6 +1912,104 @@ private fun FoodControlCard(expenses: List<TransactionEntity>, state: MainUiStat
                     Text(money(diningTotal), fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MoneyCoachCard(coach: FinanceCoachSnapshot, onOpen: () -> Unit) {
+    val accent = if (coach.overspendingLikely) LocalTokens.current.warn else LocalTokens.current.positive
+    Surface(
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen),
+        shape = awareShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(Modifier.padding(17.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(36.dp).clip(awareShape(11.dp)).background(accent.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.AutoGraph, null, Modifier.size(19.dp), tint = readableAccent(accent, accent.copy(.18f).compositeOver(MaterialTheme.colorScheme.surface)))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("aware coach", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        if (coach.overspendingLikely) "Your current pace needs attention" else "Your month is on track",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp,
+                    )
+                }
+                Text("OPEN  ›", color = LocalTokens.current.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(15.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CoachMetric("PROJECTED SPEND", money(coach.projectedSpendPaise), Modifier.weight(1f))
+                CoachMetric("PROJECTED SAVINGS", money(coach.projectedSavingsPaise), Modifier.weight(1f))
+            }
+            if (coach.topOpportunityPaise > 0) {
+                Spacer(Modifier.height(11.dp))
+                Text("A realistic change could keep ${money(coach.topOpportunityPaise)} more this month.", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(7.dp))
+            Text(coach.actions.firstOrNull()?.detail.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun CoachMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(modifier, awareShape(11.dp), MaterialTheme.colorScheme.background) {
+        Column(Modifier.padding(11.dp)) {
+            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+            Spacer(Modifier.height(3.dp))
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun MoneyCoachDialog(state: MainUiState, onDismiss: () -> Unit) {
+    val coach = remember(state.transactions, state.categories, state.budgets, state.monthlyPlan) {
+        FinanceCoach.analyse(state.transactions, state.categories, state.budgets, state.monthlyPlan)
+    }
+    var selectedQuestion by remember { mutableStateOf(coach.answers.keys.firstOrNull()) }
+    AwareDialog("aware coach", onDismiss) {
+        Text("Private guidance from your on-device ledger", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CoachMetric("MONTH-END SPEND", money(coach.projectedSpendPaise), Modifier.weight(1f))
+            CoachMetric("SAVINGS RATE", "${coach.projectedSavingsRate}%", Modifier.weight(1f))
+        }
+        NeoCard(Modifier.fillMaxWidth(), color = if (coach.overspendingLikely) LocalTokens.current.warn.copy(.15f) else LocalTokens.current.positive.copy(.15f)) {
+            Text(if (coach.overspendingLikely) "PACE CHECK" else "ON TRACK", fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Spacer(Modifier.height(5.dp))
+            Text(coach.answers["Am I on track?"].orEmpty(), fontWeight = FontWeight.SemiBold)
+            if (coach.daysRemaining > 0) Text("Safe today: ${money(coach.safeDailySpendPaise)} · ${coach.daysRemaining} days left", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+        }
+        Text("Best next moves", fontWeight = FontWeight.Bold)
+        coach.actions.forEachIndexed { index, action ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(24.dp).clip(awareShape(7.dp)).background(LocalTokens.current.accent.copy(.18f)), contentAlignment = Alignment.Center) {
+                    Text("${index + 1}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(action.title, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(action.detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                }
+            }
+        }
+        Text("Ask about this month", fontWeight = FontWeight.Bold)
+        coach.answers.keys.forEach { question ->
+            FilterPill(question, selectedQuestion == question) { selectedQuestion = question }
+        }
+        selectedQuestion?.let { question ->
+            NeoCard(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
+                Text("aware", color = LocalTokens.current.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(coach.answers[question].orEmpty(), fontSize = 13.sp)
+            }
+        }
+        Text("No transaction details leave this device for coaching.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalTokens.current.affirm, contentColor = LocalTokens.current.onAffirm)) {
+            Text("DONE")
         }
     }
 }
@@ -2177,7 +2285,7 @@ private fun SettingsScreen(
         item { AwareSettingsSection("AUTOMATION") }
         item {
             AwareSettingsGroup {
-                AwareSettingsLink(Icons.Default.AutoGraph, "AI categorisation", if (groqConfigured) "On" else "Off", LocalTokens.current.positive, onAddGroqKey)
+                AwareSettingsLink(Icons.Default.AutoGraph, "Cloud AI fallback", if (groqConfigured) "Ready" else "Off", LocalTokens.current.positive, onAddGroqKey)
                 if (selfUpdateEnabled) {
                     AwareSettingsLink(Icons.Default.SystemUpdate, "App updates", "v${BuildConfig.VERSION_NAME} · weekly checks", LocalTokens.current.hero, onCheckForUpdates)
                 }
@@ -2352,6 +2460,9 @@ private fun MonthlyReportDialog(state: MainUiState, onDismiss: () -> Unit) {
     val remaining = earned + refunds - current
     val savingsRate = if (earned <= 0) 0 else (remaining * 100 / earned).toInt()
     val difference = current - previous
+    val coach = remember(state.transactions, state.categories, state.budgets, state.monthlyPlan) {
+        FinanceCoach.analyse(state.transactions, state.categories, state.budgets, state.monthlyPlan)
+    }
     val direction = when {
         difference > 0 -> "more"
         difference < 0 -> "less"
@@ -2374,6 +2485,12 @@ private fun MonthlyReportDialog(state: MainUiState, onDismiss: () -> Unit) {
             color = if (difference <= 0) LocalTokens.current.positive else LocalTokens.current.warn,
             fontWeight = FontWeight.SemiBold,
         )
+        NeoCard(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
+            Text("MONTH-END FORECAST", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, letterSpacing = .7.sp)
+            Spacer(Modifier.height(5.dp))
+            AnimatedMoneyAmount(coach.projectedSpendPaise, style = MaterialTheme.typography.headlineLarge)
+            Text("Projected savings ${money(coach.projectedSavingsPaise)} · ${coach.projectedSavingsRate}%", color = if (coach.overspendingLikely) LocalTokens.current.warn else LocalTokens.current.positive, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
         AwareSettingsGroup {
             TransactionDetailRow("Salary", money(salary))
             TransactionDetailRow("Other earned income", money((earned - salary).coerceAtLeast(0)))
@@ -3745,7 +3862,7 @@ private fun StatementReviewDialog(
     onType: (Int, TransactionType) -> Unit,
     onCategory: (Int, Long?) -> Unit,
     onDestination: (Int, Long?) -> Unit,
-    onGroq: () -> Unit,
+    onCategorise: () -> Unit,
     onAddCategory: (Boolean) -> Unit,
     onImport: () -> Unit,
 ) {
@@ -3814,15 +3931,19 @@ private fun StatementReviewDialog(
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = onSelectNew, modifier = Modifier.weight(1f)) { Text("Select safe rows") }
-                            OutlinedButton(onClick = onGroq, enabled = groqConfigured && !review.aiBusy, modifier = Modifier.weight(1f)) {
+                            OutlinedButton(onClick = onCategorise, enabled = !review.aiBusy, modifier = Modifier.weight(1f)) {
                                 if (review.aiBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                                 else Icon(Icons.Default.AutoAwesome, null, Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text(if (groqConfigured) "Suggest categories" else "Groq off", maxLines = 1)
+                                Text("Auto-categorise", maxLines = 1)
                             }
                         }
                         Text(
-                            "Only redacted merchant words and your category names leave the device when you tap Groq.",
+                            if (groqConfigured) {
+                                "Learned merchants are matched on-device first. Only unresolved, redacted merchants and category names are sent to Groq."
+                            } else {
+                                "Runs entirely on-device using learned merchants and transaction history. Add Groq only if you want a cloud fallback."
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp,
                         )
@@ -3968,9 +4089,9 @@ private fun StorageMetric(label: String, bytes: Long?) {
 private fun GroqKeyDialog(initialKey: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var key by remember(initialKey) { mutableStateOf(initialKey) }
     var keyVisible by remember { mutableStateOf(false) }
-    AwareDialog("Connect Groq", onDismiss) {
+    AwareDialog("Cloud AI fallback", onDismiss) {
         Text(
-            "Your saved key is encrypted with Android Keystore. aware sends only redacted merchant words and category names.",
+            "Optional: local matching always runs first. Your key is encrypted with Android Keystore, and aware batches only unresolved redacted merchant words and category names.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedTextField(
